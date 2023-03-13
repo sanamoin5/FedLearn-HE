@@ -1,26 +1,17 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# Python version: 3.6
-
-
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-
 import torch
-from torch.utils.data import DataLoader
-
-from utils import get_dataset
 from args_parser import args_parser
-from update import test_inference
-from nn_models import ResNetModel, MnistModel
-from client import client
+import time
+from client import Client
 
 if __name__ == '__main__':
+    start_time = time.time()
     args = args_parser()
     if args.gpu:
         torch.cuda.set_device(args.gpu)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    client()
-    # call client, run federated way
 
-    # call standalone way
+    # call client
+    client = Client()
+    client.train_model(test=True, save=False, plot=True)
+
+    print('\n Total Run Time: {0:0.4f}'.format(time.time() - start_time))

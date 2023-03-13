@@ -5,6 +5,8 @@ def args_parser():
     parser = argparse.ArgumentParser()
 
     # federated arguments (Notation for the arguments followed from paper)
+    parser.add_argument('--fed_algo', type=str, default='FedAvg',
+                        help="Specify federated aggregation algorithm to use(FedAvg, FedProx)")
     parser.add_argument('--rounds', type=int, default=10,
                         help="number of rounds of training")
     parser.add_argument('--num_users', type=int, default=2,
@@ -41,6 +43,8 @@ def args_parser():
                         help='The plaintext modulus. Should not be passed when the scheme is CKKS.')
 
     # other arguments
+    parser.add_argument('--test_without_encryption', type=bool, default=True,
+                        help="Set to False if model does not want to be tested without encryption, default True.")
     parser.add_argument('--dataset', type=str, default='mnist', help="name \
                         of dataset(mnist, cifar-10)")
     parser.add_argument('--num_classes', type=int, default=10, help="number \
