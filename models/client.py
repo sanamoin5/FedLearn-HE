@@ -10,10 +10,12 @@ from tensorboardX import SummaryWriter
 
 from args_parser import args_parser
 from update import LocalUpdate, test_inference
-from utils import get_dataset, average_weights, exp_details, encrypted_weights_sum
+from utils import get_dataset, exp_details
 from nn_models import ResNetModel, MnistModel
 from homomorphic_encryption import HEScheme
-from server import Server
+import server
+
+server_classes = {'FedAvg': server.FedAvgServer, 'WeightedFedAvg': server.WeightedFedAvgServer}
 
 
 class Client:
@@ -53,13 +55,19 @@ class Client:
         self.context.make_context_public()
 
         # initialize server
-        self.server = Server(self.args.fed_algo, self.context)
+        self.server = server_classes[self.args.fed_algo]
+
+    def get_client_weights(self):
+        if self.args.client_weights:
+            return self.args.client_weights
+        else:
+            return [len(value) for user, value in self.user_groups.items()]
 
     def aggregate_by_weights(self, local_weights):
 
         # update global weights without encryption
-        global_weights = average_weights(local_weights)
         if self.args.test_without_encryption:
+            global_weights = server.average_weights_nonencrypted(local_weights)
             self.global_model_non_encry.load_state_dict(global_weights)
         # update global weights with encryption
         shapes = {}
@@ -68,17 +76,34 @@ class Client:
 
         encrypted_weights = self.he.encrypt_client_weights(local_weights)
         # TODO: make use of context in averaging after serializing input and context
-        # using server class method to encrypt weights
-        # global_averaged_encrypted_weights = server.encrypted_weights_sum(encrypted_weights)
 
-        # using local function to encrypt weights
-        global_averaged_encrypted_weights = encrypted_weights_sum(encrypted_weights)
-        global_weights = self.he.decrypt_and_average_weights(global_averaged_encrypted_weights, shapes,
-                                                             self.args.num_users,
-                                                             self.secret_key)
+        if self.args.fed_algo == 'WeightedFedAvg':
+            # using server class method to encrypt weights with client weights
+            client_weights = self.get_client_weights()  # can be number of items in each client or any other weight
+            global_averaged_encrypted_weights = self.server((encrypted_weights, client_weights)).aggregate()
+            global_weights = self.he.decrypt_and_average_weights(global_averaged_encrypted_weights, shapes,
+                                                                 client_weights=sum(client_weights),
+                                                                 secret_key=self.secret_key)
+        else:
+            # using server class method to encrypt weights without client weights
+            global_averaged_encrypted_weights = self.server(encrypted_weights).aggregate()
+            global_weights = self.he.decrypt_and_average_weights(global_averaged_encrypted_weights, shapes,
+                                                                 client_weights=self.args.num_clients,
+                                                                 secret_key=self.secret_key)
 
         # update global weights
         self.global_model.load_state_dict(global_weights)
+
+    def aggregate_by_int_gradients(self, temp_model):
+        bound = 2 ** 3
+        prec = 32
+        params_modules = list(temp_model.named_parameters())
+        params_grad_list = []
+        for params_module in params_modules:
+            name, params = params_module
+            params_grad_list.append(copy.deepcopy(params.grad).view(-1))
+
+        params_grad = ((torch.cat(params_grad_list, 0) + bound) * 2 ** prec).long()
 
     def aggregate_by_gradients(self, temp_model):
         bound = 2 ** 3
@@ -114,20 +139,23 @@ class Client:
             print(f'\n | Global Training Round : {round_ + 1} |\n')
 
             self.global_model.train()
-            m = self.args.num_users
+            m = self.args.num_clients
 
             idxs_users = range(m)
 
             for idx in idxs_users:
                 local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
                                           idxs=self.user_groups[idx], logger=self.logger)
-                w, loss, temp_model = local_model.update_weights(
+                model, loss = local_model.update_weights(
                     model=copy.deepcopy(self.global_model), global_round=round_)
-                local_weights.append(copy.deepcopy(w))
+                local_weights.append(copy.deepcopy(model.state_dict()))
                 local_losses.append(copy.deepcopy(loss))
 
-            self.aggregate_by_gradients(temp_model)
-            self.aggregate_by_weights(local_weights)
+            if self.args.aggregation_type == 'weights':
+                self.aggregate_by_weights(local_weights)
+            elif self.args.aggregation_type == 'gradients':
+                self.aggregate_by_gradients(model)
+
             loss_avg = sum(local_losses) / len(local_losses)
             train_loss.append(loss_avg)
 
@@ -152,7 +180,7 @@ class Client:
     def evaluate_model(self, idx):
         list_acc, list_loss = [], []
         self.global_model.eval()
-        for c in range(self.args.num_users):
+        for c in range(self.args.num_clients):
             local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
                                       idxs=self.user_groups[idx], logger=self.logger)
             acc, loss = local_model.inference(model=self.global_model)
@@ -184,14 +212,6 @@ class Client:
         time.sleep(3)
         with open(file_name, 'wb') as f:
             pickle.dump([train_loss, train_accuracy], f)
-
-    @staticmethod
-    def serialize_encrypted_data():
-        pass
-
-    @staticmethod
-    def deserialize_encrypted_data():
-        pass
 
     def convert_float_to_int(self):
         pass

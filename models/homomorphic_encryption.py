@@ -15,8 +15,9 @@ import time
 
 # use <T> kind to initialize he
 class HEScheme:
-    def __init__(self, he_scheme_name, bits_scale=40, poly_modulus_degree=8192, coeff_mod_bit_sizes=[40, 20, 40],
-                 global_scale=40, create_galois_keys=False, plain_modulus=1032193):
+    def __init__(self, he_scheme_name, bits_scale=40, poly_modulus_degree=8192,
+                 coeff_mod_bit_sizes=[40, 40, 40, 40, 40], global_scale=40, create_galois_keys=False,
+                 plain_modulus=1032193):
         self.bits_scale = bits_scale
         self.poly_modulus_degree = poly_modulus_degree
         self.coeff_mod_bit_sizes = coeff_mod_bit_sizes
@@ -48,7 +49,7 @@ class HEScheme:
         if self.create_galois_keys:
             self.context.generate_galois_keys()
         self.encrypt_function = ts.ckks_vector
-        #self.decrypt_func =
+        # self.decrypt_func =
         # pack all channels into a single flattened vector
         # enc_x = ts.CKKSVector.pack_vectors(enc_channels)
 
@@ -66,6 +67,12 @@ class HEScheme:
         self.encrypt_function = ts.bfv_vector
         # encrypted_vector = ts.bfv_vector(context, plain_vector)
 
+    def serialize_encrypted_data(self):
+        pass
+
+    def deserialize_encrypted_data(self):
+        pass
+
     def encrypt_client_weights(self, clients_weights, secret_key=None) -> list:
         encr = []
         for client_weights in clients_weights:
@@ -76,11 +83,32 @@ class HEScheme:
             encr.append(encr_state_dict)
         return encr
 
-    # TODO: make it static if secret key not needed
-    def decrypt_and_average_weights(self, encr_weights, shapes, num_clients, secret_key=None):
+    def decrypt_and_average_weights(self, encr_weights, shapes, client_weights, secret_key=None):
         decry_model = {}
         for key, value in encr_weights.items():
             decry_model[key] = torch.reshape(torch.tensor(value.decrypt(secret_key)), shapes[key])
             # average weights
-            decry_model[key] = torch.div(decry_model[key], num_clients)
+            decry_model[key] = torch.div(decry_model[key], client_weights)
         return decry_model
+
+
+def get_client_encrypted_grad(client_inputs, client_labels, net_dict, client_net):
+    client_net.load_state_dict(net_dict)
+    client_outputs = client_net(client_inputs)
+    client_loss = criterion(client_outputs, client_labels)
+    client_optimizer = optim.SGD(client_net.parameters(), lr=LR, momentum=0.9)
+    client_optimizer.zero_grad()  # 梯度置零
+    client_loss.backward()  # 求取梯度
+
+    params_modules = list(client_net.named_parameters())
+    params_grad_list = []
+    for params_module in params_modules:
+        name, params = params_module
+        params_grad_list.append(copy.deepcopy(params.grad).view(-1))
+
+    params_grad = ((torch.cat(params_grad_list, 0) + bound) * 2 ** prec).long().cuda()
+    client_encrypted_grad = Enc(pk, params_grad)
+
+    client_optimizer.zero_grad()
+
+    return client_encrypted_grad

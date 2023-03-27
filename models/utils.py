@@ -2,13 +2,11 @@
 # -*- coding: utf-8 -*-
 # Python version: 3.6
 
-import copy
-
-import torch
 from torchvision import datasets, transforms
 
 from sampling import cifar_iid, cifar_noniid
 from sampling import mnist_iid, mnist_noniid, mnist_noniid_unequal
+
 
 
 def get_dataset(args):
@@ -32,7 +30,7 @@ def get_dataset(args):
         # sample training data amongst users
         if args.iid:
             # Sample IID user data from Mnist
-            user_groups = cifar_iid(train_dataset, args.num_users)
+            user_groups = cifar_iid(train_dataset, args.num_clients)
         else:
             # Sample Non-IID user data from Mnist
             if args.unequal:
@@ -40,7 +38,7 @@ def get_dataset(args):
                 raise NotImplementedError()
             else:
                 # Chose equal splits for every user
-                user_groups = cifar_noniid(train_dataset, args.num_users)
+                user_groups = cifar_noniid(train_dataset, args.num_clients)
 
     elif args.dataset == 'mnist':
 
@@ -59,40 +57,17 @@ def get_dataset(args):
         # sample training data amongst users
         if args.iid:
             # Sample IID user data from Mnist
-            user_groups = mnist_iid(train_dataset, args.num_users)
+            user_groups = mnist_iid(train_dataset, args.num_clients)
         else:
             # Sample Non-IID user data from Mnist
             if args.unequal:
                 # Chose uneuqal splits for every user
-                user_groups = mnist_noniid_unequal(train_dataset, args.num_users)
+                user_groups = mnist_noniid_unequal(train_dataset, args.num_clients)
             else:
                 # Chose euqal splits for every user
-                user_groups = mnist_noniid(train_dataset, args.num_users)
+                user_groups = mnist_noniid(train_dataset, args.num_clients)
 
     return train_dataset, test_dataset, user_groups
-
-
-def average_weights(w):
-    """
-    Returns the average of the weights.
-    """
-    w_avg = copy.deepcopy(w[0])
-    for key in w_avg.keys():
-        for i in range(1, len(w)):
-            w_avg[key] += w[i][key]
-        w_avg[key] = torch.div(w_avg[key], len(w))
-    return w_avg
-
-
-def encrypted_weights_sum(encrypted_weights, context=None):
-    """
-    Returns the average of the weights with .
-    """
-    w_avg = copy.deepcopy(encrypted_weights[0])
-    for key in w_avg.keys():
-        for i in range(1, len(encrypted_weights)):
-            w_avg[key] += encrypted_weights[i][key]
-    return w_avg
 
 
 def exp_details(args):
