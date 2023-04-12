@@ -12,6 +12,6 @@ if __name__ == '__main__':
 
     # call client
     client = Client()
-    client.train_model(test=True, save=False, plot=False)
+    client.train_clients(test=True, save=True, plot=True)
 
     print('\n Total Run Time: {0:0.4f}'.format(time.time() - start_time))

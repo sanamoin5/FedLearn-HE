@@ -7,8 +7,6 @@ def args_parser():
     # federated arguments (Notation for the arguments followed from paper)
     parser.add_argument('--fed_algo', type=str, default='FedAvg',
                         help="Specify federated aggregation algorithm to use(FedAvg, FedProx)")
-    parser.add_argument('--aggregation_type', type=str, default='weights',
-                        help="Set to 'weights'/'gradients' to specify federated aggregation type, default is weights")
     parser.add_argument('--rounds', type=int, default=10,
                         help="number of rounds of training ()Default: 10")
     parser.add_argument('--num_clients', type=int, default=2,
@@ -53,11 +51,11 @@ def args_parser():
                         help='The plaintext modulus. Should not be passed when the scheme is CKKS.')
 
     # other arguments
-    parser.add_argument('--test_with_encryption', dest='test_without_encryption', action='store_true',
+    parser.add_argument('--train_with_encryption', dest='train_without_encryption', action='store_true',
                         help="Set if model wants to be tested with encryption, default set")
-    parser.add_argument('--test_without_encryption', dest='test_without_encryption', action='store_false',
+    parser.add_argument('--train_without_encryption', dest='train_without_encryption', action='store_false',
                         help="Set if model does not want to be tested with encryption (default not set).")
-    parser.set_defaults(test_without_encryption=True)
+    parser.set_defaults(train_without_encryption=True)
 
     parser.add_argument('--dataset', type=str, default='mnist', help="name \
                         of dataset(mnist, cifar-10)")
