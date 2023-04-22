@@ -4,7 +4,7 @@ import torch
 
 
 class Server(ABC):
-    # perform homomorphic summation
+    # perform homomorphic aggregation
     @abstractmethod
     def aggregate(self):
         pass
@@ -28,24 +28,12 @@ class Server(ABC):
 
 
 class FedAvgServer(Server):
-    def __init__(self, encrypted_weights):
+    def __init__(self, encrypted_weights, client_weights = None):
         self.encrypted_weights = encrypted_weights
-
-    def aggregate(self):
-        w_sum = {}
-        for encrypted_client_weights in self.encrypted_weights:
-            for key in encrypted_client_weights:
-                if key not in w_sum:
-                    w_sum[key] = 0
-                w_sum[key] += encrypted_client_weights[key]
-
-        return w_sum
-
-
-class WeightedFedAvgServer(Server):
-    def __init__(self, encrypted_weights_client_weights):
-        self.encrypted_weights = encrypted_weights_client_weights[0]
-        self.client_weights = encrypted_weights_client_weights[1]
+        if client_weights == None:
+            self.client_weights = [1] * len(encrypted_weights)
+        else:
+            self.client_weights = client_weights
 
     def aggregate(self):
         w_sum = {}

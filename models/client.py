@@ -16,8 +16,8 @@ import server
 import federated_clients
 from homomorphic_encryption import HEScheme
 
-server_classes = {'FedAvg': server.FedAvgServer, 'WeightedFedAvg': server.WeightedFedAvgServer}
-client_classes = {'FedAvg': federated_clients.FedAvgClient}
+server_classes = {'FedAvg': server.FedAvgServer,'WeightedFedAvg': server.FedAvgServer, 'GradientBasedFedAvg': server.FedAvgServer}
+client_classes = {'FedAvg': federated_clients.FedAvgClient, 'WeightedFedAvg': federated_clients.WeightedFedAvgClient, 'GradientBasedFedAvg': federated_clients.GradientBasedFedAvgClient}
 
 
 class Client:

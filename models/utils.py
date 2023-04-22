@@ -81,6 +81,7 @@ def exp_details(args):
         print('    IID')
     else:
         print('    Non-IID')
+    print(f'Federated learning algorithm: {args.fed_algo}')
     print(f'    Local Batch size   : {args.local_bs}')
     print(f'    Local Epochs       : {args.epochs}\n')
     return
