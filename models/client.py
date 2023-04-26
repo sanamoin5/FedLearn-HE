@@ -53,12 +53,6 @@ class Client:
         self.client = client_classes[self.args.fed_algo](self.args, self.train_dataset, self.user_groups, self.logger,
                                                          self.server)  # instantiate the client class corresponding to the selected federated algorithm
 
-        # initialize homomorphic encryption
-        self.he = HEScheme(self.args.he_scheme_name)
-        self.context = self.he.context
-        self.secret_key = self.context.secret_key()  # save the secret key before making context public
-        self.context.make_context_public()  # make the context object public so it can be shared across clients
-
     def train_clients(self, test=False, save=False, plot=False):
         self.global_model.to(self.device)
         self.global_model.train()

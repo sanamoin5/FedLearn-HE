@@ -33,9 +33,12 @@ class FedClient:
 
         # initialize homomorphic encryption
         self.he = HEScheme(self.args.he_scheme_name)
-        self.context = self.he.context
-        self.secret_key = self.context.secret_key()
-        self.context.make_context_public()
+        if self.args.he_scheme_name == 'ckks':
+            self.context = self.he.context
+            self.secret_key = self.context.secret_key()  # save the secret key before making context public
+            self.context.make_context_public()  # make the context object public so it can be shared across clients
+        elif self.args.he_scheme_name == 'paillier':
+            self.secret_key = self.he.private_key
 
     def train_val_test(self, idxs):
         """
@@ -320,7 +323,7 @@ class GradientBasedFedAvgClient(FedClient):
         encrypted_gradients = self.he.encrypt_client_weights(local_gradients)
 
         # Aggregate encrypted gradients
-        global_averaged_encrypted_gradients = self.server(encrypted_gradients, client_weights).aggregate()
+        global_averaged_encrypted_gradients = self.server(encrypted_gradients, client_weights).aggregate(self.args.he_scheme_name)
 
         # Decrypt and average the gradients
         global_decrypted_averaged_gradients = self.he.decrypt_and_average_weights(global_averaged_encrypted_gradients,
