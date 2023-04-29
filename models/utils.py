@@ -84,4 +84,9 @@ def exp_details(args):
     print(f'Federated learning algorithm: {args.fed_algo}')
     print(f'    Local Batch size   : {args.local_bs}')
     print(f'    Local Epochs       : {args.epochs}\n')
+    print(f'    Num Clients       : {args.num_clients}\n')
+
+    print('    Homomorphic Encryption parameters:')
+    print(f'    Scheme name       : {args.he_scheme_name}\n')
+
     return

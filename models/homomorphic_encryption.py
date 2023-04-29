@@ -21,14 +21,16 @@ class HEScheme:
 
         if he_scheme_name == 'ckks':
             self.init_ckks()
-            self.encrypt_client_weights = self.encrypt_client_weights_ckks
-            self.decrypt_and_average_weights = self.decrypt_and_average_weights_ckks
+            self.encrypt_client_weights = self.encrypt_client_weights_ckks_bfv
+            self.decrypt_and_average_weights = self.decrypt_and_average_weights_ckks_bfv
         elif he_scheme_name == 'paillier':
             self.init_paillier()
             self.encrypt_client_weights = self.encrypt_client_weights_paillier
             self.decrypt_and_average_weights = self.decrypt_and_average_weights_paillier
         elif he_scheme_name == 'bfv':
             self.init_bfv()
+            self.encrypt_client_weights = self.encrypt_client_weights_ckks_bfv
+            self.decrypt_and_average_weights = self.decrypt_and_average_weights_ckks_bfv
 
     def init_ckks(self):
         # controls precision of the fractional part
@@ -56,7 +58,8 @@ class HEScheme:
         self.public_key, self.private_key = paillier.generate_paillier_keypair()
 
     def init_bfv(self):
-        self.context = ts.context(ts.SCHEME_TYPE.BFV, poly_modulus_degree=4096, plain_modulus=1032193)
+        #TODO Set correct hyperparameter values for BFV
+        self.context = ts.context(ts.SCHEME_TYPE.BFV, poly_modulus_degree=2**13, plain_modulus=65537)
         self.encrypt_function = ts.bfv_vector
         # encrypted_vector = ts.bfv_vector(context, plain_vector)
 
@@ -66,13 +69,13 @@ class HEScheme:
     def deserialize_encrypted_data(self):
         pass
 
-    def encrypt_client_weights_ckks(self, clients_weights) -> list:
+    def encrypt_client_weights_ckks_bfv(self, clients_weights) -> list:
         encr = []
         for client_weights in clients_weights:
             encr_state_dict = {}
             for key, value in client_weights.items():
                 val = value.flatten()
-                encr_state_dict[key] = ts.ckks_vector(self.context, val)
+                encr_state_dict[key] = self.encrypt_function(self.context, val)
             encr.append(encr_state_dict)
         return encr
 
@@ -104,7 +107,7 @@ class HEScheme:
             all_enc_dicts.append(enc_dict)
         return all_enc_dicts
 
-    def decrypt_and_average_weights_ckks(self, encr_weights, shapes, client_weights, secret_key=None):
+    def decrypt_and_average_weights_ckks_bfv(self, encr_weights, shapes, client_weights, secret_key=None):
         decry_model = {}
         for key, value in encr_weights.items():
             decry_model[key] = torch.reshape(torch.tensor(value.decrypt(secret_key)), shapes[key])

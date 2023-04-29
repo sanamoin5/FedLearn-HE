@@ -39,6 +39,10 @@ class FedClient:
             self.context.make_context_public()  # make the context object public so it can be shared across clients
         elif self.args.he_scheme_name == 'paillier':
             self.secret_key = self.he.private_key
+        elif self.args.he_scheme_name == 'bfv':
+            self.context = self.he.context
+            self.secret_key = self.context.secret_key()  # save the secret key before making context public
+            self.context.make_context_public()
 
     def train_val_test(self, idxs):
         """
@@ -110,7 +114,7 @@ class FedAvgClient(FedClient):
         encrypted_weights = self.he.encrypt_client_weights(local_weights)
 
         # Aggregate encrypted weights
-        global_averaged_encrypted_weights = self.server(encrypted_weights).aggregate()
+        global_averaged_encrypted_weights = self.server(encrypted_weights).aggregate(self.args.he_scheme_name)
 
         # Decrypt and average the weights
         global_averaged_weights = self.he.decrypt_and_average_weights(global_averaged_encrypted_weights, weight_shapes,
@@ -216,7 +220,7 @@ class WeightedFedAvgClient(FedClient):
         encrypted_weights = self.he.encrypt_client_weights(local_weights)
 
         # Aggregate encrypted weights
-        global_averaged_encrypted_weights = self.server(encrypted_weights, client_weights).aggregate()
+        global_averaged_encrypted_weights = self.server(encrypted_weights, client_weights).aggregate(self.args.he_scheme_name)
 
         # Decrypt and average the weights
         global_averaged_weights = self.he.decrypt_and_average_weights(global_averaged_encrypted_weights, weight_shapes,
