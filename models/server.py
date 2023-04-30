@@ -71,7 +71,7 @@ class FedAvgServer(Server):
         if encryption_type == 'ckks' or encryption_type == 'bfv':
             w_sum = self.aggregate_ckks_bfv()
 
-        elif encryption_type == 'pailler':
+        elif encryption_type == 'paillier':
             w_sum = self.aggregate_paillier()
 
         return w_sum
