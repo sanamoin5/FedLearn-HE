@@ -1,5 +1,6 @@
 import torch
-import torch.nn as nn
+from torch import nn
+
 
 torch.manual_seed(1)
 
@@ -8,12 +9,16 @@ class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1, downsample=None):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1),
+            nn.Conv2d(
+                in_channels, out_channels, kernel_size=3, stride=stride, padding=1
+            ),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU())
+            nn.ReLU(),
+        )
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(out_channels))
+            nn.BatchNorm2d(out_channels),
+        )
         self.downsample = downsample
         self.relu = nn.ReLU()
         self.out_channels = out_channels
@@ -36,7 +41,8 @@ class ResNetModel(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
             nn.BatchNorm2d(64),
-            nn.ReLU())
+            nn.ReLU(),
+        )
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer0 = self._make_layer(block, 64, layers[0], stride=1)
         self.layer1 = self._make_layer(block, 128, layers[1], stride=2)
@@ -74,11 +80,12 @@ class ResNetModel(nn.Module):
 
         return x
 
+
 # ResNetModel(ResidualBlock, [3,4,6,3])
 
-class MnistModel(nn.Module):
 
-    def __init__(self):
+class MnistModel(nn.Module):
+    def __init__(self) -> None:
         super(MnistModel, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
@@ -87,7 +94,7 @@ class MnistModel(nn.Module):
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, 10)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
         x = nn.functional.relu(x)
         x = self.conv2(x)
@@ -101,3 +108,19 @@ class MnistModel(nn.Module):
         output = nn.functional.log_softmax(x, dim=1)
         return output
 
+
+# class MnistModel(nn.Module):
+#     def __init__(self):
+#         super(MnistModel, self).__init__()
+#         self.flatten = nn.Flatten()
+#         self.linear_relu_stack = nn.Sequential(
+#             nn.Linear(784, 11),
+#             nn.ReLU(),
+#             nn.Linear(11, 10)
+#             ## Softmax layer ignored since the loss function defined is nn.CrossEntropy()
+#         )
+#
+#     def forward(self, x):
+#         x = self.flatten(x)
+#         logits = self.linear_relu_stack(x)
+#         return logits

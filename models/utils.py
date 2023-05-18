@@ -2,30 +2,43 @@
 # -*- coding: utf-8 -*-
 # Python version: 3.6
 
+from argparse import Namespace
+from typing import Dict, Set, Tuple
+
+from numpy import int64
+from sampling import (
+    cifar_iid,
+    cifar_noniid,
+    mnist_iid,
+    mnist_noniid,
+    mnist_noniid_unequal,
+)
 from torchvision import datasets, transforms
-
-from sampling import cifar_iid, cifar_noniid
-from sampling import mnist_iid, mnist_noniid, mnist_noniid_unequal
+from torchvision.datasets.mnist import MNIST
 
 
-
-def get_dataset(args):
-    """ Returns train and test datasets and a user group which is a dict where
+def get_dataset(args: Namespace) -> Tuple[MNIST, MNIST, Dict[int, Set[int64]]]:
+    """Returns train and test datasets and a user group which is a dict where
     the keys are the user index and the values are the corresponding data for
     each of those users.
     """
 
-    if args.dataset == 'cifar':
-        data_dir = '../data/cifar/'
+    if args.dataset == "cifar":
+        data_dir = "../data/cifar/"
         apply_transform = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
 
-        train_dataset = datasets.CIFAR10(data_dir, train=True, download=True,
-                                         transform=apply_transform)
+        train_dataset = datasets.CIFAR10(
+            data_dir, train=True, download=True, transform=apply_transform
+        )
 
-        test_dataset = datasets.CIFAR10(data_dir, train=False, download=True,
-                                        transform=apply_transform)
+        test_dataset = datasets.CIFAR10(
+            data_dir, train=False, download=True, transform=apply_transform
+        )
 
         # sample training data amongst users
         if args.iid:
@@ -40,19 +53,20 @@ def get_dataset(args):
                 # Chose equal splits for every user
                 user_groups = cifar_noniid(train_dataset, args.num_clients)
 
-    elif args.dataset == 'mnist':
+    elif args.dataset == "mnist":
+        data_dir = "../data/mnist/"
 
-        data_dir = '../data/mnist/'
+        apply_transform = transforms.Compose(
+            [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+        )
 
-        apply_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))])
+        train_dataset = datasets.MNIST(
+            data_dir, train=True, download=True, transform=apply_transform
+        )
 
-        train_dataset = datasets.MNIST(data_dir, train=True, download=True,
-                                       transform=apply_transform)
-
-        test_dataset = datasets.MNIST(data_dir, train=False, download=True,
-                                      transform=apply_transform)
+        test_dataset = datasets.MNIST(
+            data_dir, train=False, download=True, transform=apply_transform
+        )
 
         # sample training data amongst users
         if args.iid:
@@ -70,23 +84,23 @@ def get_dataset(args):
     return train_dataset, test_dataset, user_groups
 
 
-def exp_details(args):
-    print('\nExperimental details:')
-    print(f'    Optimizer : {args.optimizer}')
-    print(f'    Learning  : {args.lr}')
-    print(f'    Global Rounds   : {args.rounds}\n')
+def exp_details(args: Namespace) -> None:
+    print("\nExperimental details:")
+    print(f"    Optimizer : {args.optimizer}")
+    print(f"    Learning  : {args.lr}")
+    print(f"    Global Rounds   : {args.rounds}\n")
 
-    print('    Federated parameters:')
+    print("    Federated parameters:")
     if args.iid:
-        print('    IID')
+        print("    IID")
     else:
-        print('    Non-IID')
-    print(f'Federated learning algorithm: {args.fed_algo}')
-    print(f'    Local Batch size   : {args.local_bs}')
-    print(f'    Local Epochs       : {args.epochs}\n')
-    print(f'    Num Clients       : {args.num_clients}\n')
+        print("    Non-IID")
+    print(f"Federated learning algorithm: {args.fed_algo}")
+    print(f"    Local Batch size   : {args.local_bs}")
+    print(f"    Local Epochs       : {args.epochs}\n")
+    print(f"    Num Clients       : {args.num_clients}\n")
 
-    print('    Homomorphic Encryption parameters:')
-    print(f'    Scheme name       : {args.he_scheme_name}\n')
+    print("    Homomorphic Encryption parameters:")
+    print(f"    Scheme name       : {args.he_scheme_name}\n")
 
     return

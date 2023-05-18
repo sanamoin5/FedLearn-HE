@@ -1,9 +1,11 @@
+import time
+
 import torch
 from args_parser import args_parser
-import time
 from client import Client
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     start_time = time.time()
     args = args_parser()
     if args.gpu:
@@ -14,4 +16,4 @@ if __name__ == '__main__':
     client = Client()
     client.train_clients(test=True, save=True, plot=True)
 
-    print('\n Total Run Time: {0:0.4f}'.format(time.time() - start_time))
+    print("\n Total Run Time: {0:0.4f}".format(time.time() - start_time))

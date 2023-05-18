@@ -1,6 +1,10 @@
 import copy
 from abc import ABC, abstractmethod
+from collections import OrderedDict
+from typing import Dict, List
+
 import torch
+from tenseal.tensors.bfvvector import BFVVector
 
 
 class Server(ABC):
@@ -15,7 +19,7 @@ class Server(ABC):
     def serialize_data(self):
         pass
 
-    def average_weights_nonencrypted(w):
+    def average_weights_nonencrypted(w) -> OrderedDict:
         """
         Returns the average of the weights.
         """
@@ -28,16 +32,20 @@ class Server(ABC):
 
 
 class FedAvgServer(Server):
-    def __init__(self, encrypted_weights, client_weights=None):
+    def __init__(
+        self, encrypted_weights: List[Dict[str, BFVVector]], client_weights: None = None
+    ) -> None:
         self.encrypted_weights = encrypted_weights
         if client_weights == None:
             self.client_weights = [1] * len(encrypted_weights)
         else:
             self.client_weights = client_weights
 
-    def aggregate_ckks_bfv(self):
+    def aggregate_ckks_bfv(self) -> Dict[str, BFVVector]:
         w_sum = {}
-        for encrypted_client_weights, client_weight in zip(self.encrypted_weights, self.client_weights):
+        for encrypted_client_weights, client_weight in zip(
+            self.encrypted_weights, self.client_weights
+        ):
             for key in encrypted_client_weights:
                 if key not in w_sum:
                     w_sum[key] = 0
@@ -60,18 +68,21 @@ class FedAvgServer(Server):
             for j in range(param_value_range):
                 sum_list_item_values = 0
                 for k in range(len_clients):
-                    sum_list_item_values = sum_list_item_values + list_param_values[k][j] * self.client_weights[k]
+                    sum_list_item_values = (
+                        sum_list_item_values
+                        + list_param_values[k][j] * self.client_weights[k]
+                    )
                 temp_param_values_list.append(sum_list_item_values)
             w_sum[key] = temp_param_values_list
         return w_sum
 
-    def aggregate(self, encryption_type):
+    def aggregate(self, encryption_type: str) -> Dict[str, BFVVector]:
         w_sum = {}
 
-        if encryption_type == 'ckks' or encryption_type == 'bfv':
+        if encryption_type == "ckks" or encryption_type == "bfv":
             w_sum = self.aggregate_ckks_bfv()
 
-        elif encryption_type == 'paillier':
+        elif encryption_type == "paillier":
             w_sum = self.aggregate_paillier()
 
         return w_sum
