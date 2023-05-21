@@ -4,11 +4,11 @@ import pickle
 import time
 from typing import List
 
-import federated_clients
 import numpy as np
 import server
 import torch
 from args_parser import args_parser
+from models import federated_clients
 from nn_models import MnistModel, ResNetModel
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
