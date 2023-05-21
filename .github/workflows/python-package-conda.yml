@@ -22,7 +22,7 @@ jobs:
       run: |
         conda env update --file environment.yml --name base
     - name: Run Unit Tests
-      run: python -m unittest discover
+      run: python -m unittest discover -s ./tests  -p 'test_*.py'
 
     - name: Upload Test Results
       uses: actions/upload-artifact@v2
