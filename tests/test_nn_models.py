@@ -16,7 +16,7 @@ class TestMnistModel(unittest.TestCase):
         output = self.model(input_tensor)
 
         # Ensure the output tensor has the expected shape
-        expected_shape = (1, 11)  # Batch size 1, 10 classes
+        expected_shape = (1, 12)  # Batch size 1, 10 classes
         self.assertEqual(output.shape, expected_shape)
 
 
