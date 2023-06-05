@@ -10,10 +10,25 @@ from models.homomorphic_encryption import HEScheme
 from models.nn_models import MnistModel
 from models.server import FedAvgServer
 from numpy import int64
-from tensorboardX.writer import SummaryWriter
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets.mnist import MNIST
+
+
+function_times = {}
+
+
+def measure_time(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"Time taken by {func.__name__}: {elapsed_time} seconds")
+        function_times[func.__name__ + "_time"] = elapsed_time
+        return result
+
+    return wrapper
 
 
 class DatasetSplit(Dataset):
@@ -37,16 +52,26 @@ class FedClient:
         args: Namespace,
         dataset: MNIST,
         user_groups: Dict[int, Set[int64]],
-        logger: SummaryWriter,
+        json_logs,
         server: Type[FedAvgServer],
     ) -> None:
         self.args = args
         self.device = "cuda" if args.gpu else "cpu"
         self.dataset = dataset
         self.user_groups = user_groups
-        self.logger = logger
         self.server = server
+        self.json_logs = json_logs
         self.criterion = nn.NLLLoss().to(self.device)
+
+        # Initialize train, validation and test loaders for each client
+        self.train_loader, self.valid_loader, self.test_loader = [], [], []
+        for idx in range(self.args.num_clients):
+            train_loader, valid_loader, test_loader = self.train_val_test(
+                list(self.user_groups[idx])
+            )
+            self.train_loader.append(train_loader)
+            self.valid_loader.append(valid_loader)
+            self.test_loader.append(test_loader)
 
         # initialize homomorphic encryption
         self.he = HEScheme(self.args.he_scheme_name)
@@ -128,12 +153,10 @@ class FedClient:
         else:
             return [len(value) for user, value in self.user_groups.items()]
 
+    @measure_time
     def train_local_model(
         self, model: MnistModel, global_round: int, client_idx: int
-    ) -> Tuple[MnistModel, float, float]:
-        start_time = time.time()
-        global_model = copy.deepcopy(model)
-
+    ) -> Tuple[MnistModel, float]:
         # Set mode to train model
         model.train()
         epoch_loss = []
@@ -180,23 +203,21 @@ class FedClient:
                     )
 
                 # Log the loss to TensorBoard
-                self.logger.add_scalar("loss", loss.item())
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
-        end_time = time.time()
-        return model, sum(epoch_loss) / len(epoch_loss), end_time - start_time
+        return model, sum(epoch_loss) / len(epoch_loss)
 
     @abstractmethod
-    def aggregate_by_weights(self, weights):
+    def aggregate_by_weights(self, weights, client_weights=None):
         pass
 
-    def train_clients(self, global_model, round_, global_model_non_encry=None):
+    @measure_time
+    def train_clients(self, global_model, round_, wandb, global_model_non_encry=None):
         local_weights, local_losses, eval_acc, eval_losses = [], [], [], []
-        time_training = 0
         # Iterate over each client
         for client_idx in range(self.args.num_clients):
             # Train local model
-            local_model, loss, time_training = self.train_local_model(
+            local_model, local_train_loss = self.train_local_model(
                 model=copy.deepcopy(global_model),
                 global_round=round_,
                 client_idx=client_idx,
@@ -204,7 +225,7 @@ class FedClient:
 
             # Collect local model weights and losses
             local_weights.append(copy.deepcopy(local_model.state_dict()))
-            local_losses.append(copy.deepcopy(loss))
+            local_losses.append(copy.deepcopy(local_train_loss))
 
             # Evaluate local model on test dataset
             accuracy, loss = self.evaluate_model(
@@ -212,10 +233,11 @@ class FedClient:
             )
             eval_acc.append(accuracy)
             eval_losses.append(loss)
+            self.update_local_training_logs(wandb, local_train_loss, accuracy, loss)
 
         # Aggregate local model weights into global model weights
-        aggregated_weights, time_processing = self.aggregate_by_weights(local_weights)
-        time_processing["time_training_local"] = time_training
+        aggregated_weights = self.aggregate_by_weights(local_weights)
+
         if self.args.train_without_encryption:
             global_weights = self.server.average_weights_nonencrypted(local_weights)
             global_model_non_encry.load_state_dict(global_weights)
@@ -224,10 +246,47 @@ class FedClient:
         train_loss = sum(local_losses) / len(local_losses)
         train_accuracy = sum(eval_acc) / len(eval_acc)
 
-        return (
-            train_loss,
-            train_accuracy,
-            aggregated_weights,
-            global_model_non_encry,
-            time_processing,
+        return (train_loss, train_accuracy, aggregated_weights, global_model_non_encry)
+
+    def update_local_training_logs(
+        self, wandb, local_train_loss, local_eval_accuracy, local_eval_loss
+    ):
+        wandb.log({"local_train_loss": local_train_loss})
+        wandb.log(
+            {
+                "local_eval_accuracy": local_eval_accuracy,
+                "local_eval_loss": local_eval_loss,
+            }
+        )
+
+        if "local_train_loss" in self.json_logs:
+            self.json_logs["local_train_loss"].append(local_train_loss)
+        else:
+            self.json_logs["local_train_loss"] = [local_train_loss]
+
+        if "local_eval_accuracy" in self.json_logs:
+            self.json_logs["local_eval_accuracy"].append(local_eval_accuracy)
+        else:
+            self.json_logs["local_eval_accuracy"] = [local_eval_accuracy]
+
+        if "local_eval_loss" in self.json_logs:
+            self.json_logs["local_eval_loss"].append(local_eval_loss)
+        else:
+            self.json_logs["local_eval_loss"] = [local_eval_loss]
+
+    @measure_time
+    def encrypt_weights(self, weights):
+        return self.he.encrypt_client_weights(weights)
+
+    @measure_time
+    def aggregate_weights(self, weights):
+        return self.server(weights).aggregate(self.args.he_scheme_name)
+
+    @measure_time
+    def decrypt_weights(self, weights, weight_shapes):
+        return self.he.decrypt_and_average_weights(
+            weights,
+            weight_shapes,
+            client_weights=self.args.num_clients,
+            secret_key=self.secret_key,
         )
