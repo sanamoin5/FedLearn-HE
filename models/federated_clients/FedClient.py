@@ -61,7 +61,7 @@ class FedClient:
         self.user_groups = user_groups
         self.server = server
         self.json_logs = json_logs
-        self.criterion = nn.NLLLoss().to(self.device)
+        self.criterion = nn.CrossEntropyLoss().to(self.device)
 
         # Initialize train, validation and test loaders for each client
         self.train_loader, self.valid_loader, self.test_loader = [], [], []
@@ -178,13 +178,13 @@ class FedClient:
             for batch_idx, (images, labels) in enumerate(self.train_loader[client_idx]):
                 images, labels = images.to(self.device), labels.to(self.device)
 
-                # Zero the gradients
-                model.zero_grad()
-
                 # Compute the forward pass
                 log_probs = model(images)
 
                 loss = self.criterion(log_probs, labels)
+
+                # Zero the gradients
+                self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 

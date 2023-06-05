@@ -11,7 +11,7 @@ import torch
 import wandb
 from args_parser import args_parser
 from models import federated_clients
-from nn_models import MnistModel, ResNetModel
+from nn_models import MnistModel, cifar_cnn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils import exp_details, get_dataset
@@ -45,7 +45,7 @@ class Client:
         if self.args.dataset == "mnist":
             self.global_model = MnistModel()
         elif self.args.dataset == "cifar":
-            self.global_model = ResNetModel()
+            self.global_model = cifar_cnn
         else:
             exit("Error: unrecognized model")
 
@@ -247,6 +247,7 @@ class Client:
         wandb.config.local_epochs = self.args.epochs
         wandb.config.num_clients = self.args.num_clients
         wandb.config.he_scheme_name = self.args.he_scheme_name
+        wandb.config.dataset = self.args.dataset
 
         self.json_logs["device"] = self.device
         self.json_logs["optimizer"] = self.args.optimizer
@@ -258,6 +259,7 @@ class Client:
         self.json_logs["local_epochs"] = self.args.epochs
         self.json_logs["num_clients"] = self.args.num_clients
         self.json_logs["he_scheme_name"] = self.args.he_scheme_name
+        self.json_logs["dataset"] = self.args.dataset
 
         for key, value in recorded_times.items():
             wandb.log({key: value})
