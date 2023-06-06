@@ -1,5 +1,6 @@
 import copy
-import os
+import json
+import logging
 import pickle
 import time
 from typing import List
@@ -7,10 +8,10 @@ from typing import List
 import numpy as np
 import server
 import torch
+import wandb
 from args_parser import args_parser
 from models import federated_clients
-from nn_models import MnistModel, ResNetModel
-from tensorboardX import SummaryWriter
+from nn_models import MnistModel, cifar_cnn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils import exp_details, get_dataset
@@ -31,32 +32,33 @@ client_classes = {
     "BatchCryptClient": federated_clients.BatchCryptBasedFedAvgClient,
 }
 
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 class Client:
     def __init__(self) -> None:
-        # define paths
-        path_project = os.path.abspath("..")
-        self.logger = SummaryWriter("../logs")  # instantiate a TensorBoard logger
-
+        wandb.init(project="FedLearn-HE")
         self.args = args_parser()  # parse command line arguments
-        exp_details(
-            self.args
-        )  # print some details about the experiment, like dataset, model, etc.
-
-        if self.args.gpu_id:
-            torch.cuda.set_device(self.args.gpu_id)
-        self.device = "cuda" if self.args.gpu else "cpu"
-
-        # load the dataset and divide it into user groups
-        self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
-
         # BUILD MODEL
         if self.args.dataset == "mnist":
             self.global_model = MnistModel()
         elif self.args.dataset == "cifar":
-            self.global_model = ResNetModel()
+            self.global_model = cifar_cnn
         else:
             exit("Error: unrecognized model")
+
+        exp_details(
+            self.args
+        )  # print some details about the experiment, like dataset, model, etc.
+        if self.args.gpu_id:
+            torch.cuda.set_device(self.args.gpu_id)
+        self.device = "cuda" if self.args.gpu else "cpu"
+        self.json_logs = {}
+
+        # load the dataset and divide it into user groups
+        self.train_dataset, self.test_dataset, self.user_groups = get_dataset(self.args)
 
         # create a non-encrypted copy of the global model
         self.global_model_non_encry = copy.deepcopy(self.global_model)
@@ -66,136 +68,10 @@ class Client:
             self.args.fed_algo
         ]  # instantiate the server class corresponding to the selected federated algorithm
         self.client = client_classes[self.args.fed_algo](
-            self.args, self.train_dataset, self.user_groups, self.logger, self.server
+            self.args, self.train_dataset, self.user_groups, self.json_logs, self.server
         )  # instantiate the client class corresponding to the selected federated algorithm
 
-    # def get_client_weights(self):
-    #     if self.args.client_weights:
-    #         return self.args.client_weights
-    #     else:
-    #         return [len(value) for user, value in self.user_groups.items()]
-
-    # def aggregate_by_weights(self, local_weights):
-    #     # update global weights without encryption
-    #     if self.args.train_without_encryption:
-    #         global_weights = self.server.average_weights_nonencrypted(local_weights)
-    #         self.global_model_non_encry.load_state_dict(global_weights)
-    #     # update global weights with encryption
-    #     shapes = {}
-    #     for key, value in local_weights[0].items():
-    #         shapes[key] = value.shape
-    #
-    #     # TODO: make use of context in averaging after serializing input and context
-    #     encrypted_weights = self.he.encrypt_client_weights(local_weights)
-    #
-    #     if self.args.fed_algo == 'WeightedFedAvg':
-    #         # using server class method to encrypt weights with client weights
-    #         client_weights = self.get_client_weights()  # can be number of items in each client or any other weight
-    #         global_averaged_encrypted_weights = self.server((encrypted_weights, client_weights)).aggregate()
-    #         global_weights = self.he.decrypt_and_average_weights(global_averaged_encrypted_weights, shapes,
-    #                                                              client_weights=sum(client_weights),
-    #                                                              secret_key=self.secret_key)
-    #     else:
-    #         # using server class method to encrypt weights without client weights
-    #         global_averaged_encrypted_weights = self.server(encrypted_weights).aggregate()
-    #         global_weights = self.he.decrypt_and_average_weights(global_averaged_encrypted_weights, shapes,
-    #                                                              client_weights=self.args.num_clients,
-    #                                                              secret_key=self.secret_key)
-    #
-    #     # update global weights
-    #     self.global_model.load_state_dict(global_weights)
-
-    # def aggregate_by_int_gradients(self, temp_model):
-    #     bound = 2 ** 3
-    #     prec = 32
-    #     params_modules = list(temp_model.named_parameters())
-    #     params_grad_list = []
-    #     for params_module in params_modules:
-    #         name, params = params_module
-    #         params_grad_list.append(copy.deepcopy(params.grad).view(-1))
-    #
-    #     params_grad = ((torch.cat(params_grad_list, 0) + bound) * 2 ** prec).long()
-
-    # def aggregate_by_gradients(self, temp_model):
-    #     bound = 2 ** 3
-    #     prec = 32
-    #     params_modules = list(temp_model.named_parameters())
-    #     params_grad_list = []
-    #     for params_module in params_modules:
-    #         name, params = params_module
-    #         params_grad_list.append(copy.deepcopy(params.grad).view(-1))
-    #
-    #     params_grad = ((torch.cat(params_grad_list, 0) + bound) * 2 ** prec).long()
-
-    # def train_model(self, test=False, save=False, plot=False):
-    #     # Set the model to train and send it to device.
-    #     self.global_model.to(self.device)
-    #     self.global_model.train()
-    #
-    #     if self.args.train_without_encryption:
-    #         self.global_model_non_encry.to(self.device)
-    #         self.global_model_non_encry.train()
-    #
-    #     print(self.global_model)
-    #
-    #     # copy weights
-    #     self.global_weights = self.global_model.state_dict()
-    #
-    #     # Training
-    #     train_loss, train_accuracy = [], []
-    #     print_every = 2
-    #
-    #     for round_ in tqdm(range(self.args.rounds)):
-    #         local_weights, local_losses = [], []
-    #         print(f'\n | Global Training Round : {round_ + 1} |\n')
-    #
-    #         self.global_model.train()
-    #         m = self.args.num_clients
-    #
-    #         idxs_users = range(m)
-    #         if self.args.aggregation_type == 'weights':
-    #             for idx in idxs_users:
-    #                 local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-    #                                           idxs=self.user_groups[idx], logger=self.logger)
-    #                 model, loss = local_model.update_weights(
-    #                     model=copy.deepcopy(self.global_model), global_round=round_)
-    #                 local_weights.append(copy.deepcopy(model.state_dict()))
-    #                 local_losses.append(copy.deepcopy(loss))
-    #             self.aggregate_by_weights(local_weights)
-    #         elif self.args.aggregation_type == 'gradients':
-    #             for idx in idxs_users:
-    #                 local_model = LocalUpdate(args=self.args, dataset=self.train_dataset,
-    #                                           idxs=self.user_groups[idx], logger=self.logger)
-    #                 model, loss = local_model.update_weights(
-    #                     model=copy.deepcopy(self.global_model), global_round=round_)
-    #                 local_weights.append(copy.deepcopy(model.state_dict()))
-    #                 local_losses.append(copy.deepcopy(loss))
-    #             self.aggregate_by_gradients(model)
-    #
-    #         loss_avg = sum(local_losses) / len(local_losses)
-    #         train_loss.append(loss_avg)
-    #
-    #         # Calculate avg training accuracy over all users at every epoch
-    #         list_acc, list_loss = self.evaluate_model(idx)
-    #
-    #         train_accuracy.append(sum(list_acc) / len(list_acc))
-    #
-    #         # print global training loss after every 'i' rounds
-    #         if (round_ + 1) % print_every == 0:
-    #             print(f' \nAvg Training Stats after {round_ + 1} global rounds:')
-    #             print(f'Training Loss : {np.mean(np.array(train_loss))}')
-    #             print('Train Accuracy: {:.2f}% \n'.format(100 * train_accuracy[-1]))
-    #
-    #     if test:
-    #         self.test_model(train_accuracy)
-    #     if save:
-    #         self.save_model(train_loss, train_accuracy)
-    #     if plot:
-    #         self.plot(train_loss, train_accuracy)
-
-    def train_clients(
-        self, test: bool = False, save: bool = False, plot: bool = False
-    ) -> None:
+    def train_clients(self, test: bool = False, save: bool = False, plot: bool = False):
         self.global_model.to(self.device)
         self.global_model.train()
 
@@ -213,7 +89,7 @@ class Client:
 
         # Loop through the specified number of rounds of training.
         for round_ in tqdm(range(self.args.rounds)):
-            print(f"\n | Global Training Round : {round_ + 1} |\n")
+            logging.info(f"\n | Global Training Round : {round_ + 1} |\n")
 
             self.global_model.train()
 
@@ -223,20 +99,24 @@ class Client:
                 train_acc,
                 global_weights,
                 self.global_model_non_encry,
-                time_taken,
             ) = self.client.train_clients(
-                self.global_model, round_, self.global_model_non_encry
+                self.global_model, round_, wandb, self.global_model_non_encry
             )
 
             self.global_model.load_state_dict(copy.deepcopy(global_weights))
 
             train_accuracy_list.append(train_acc)
             train_loss_list.append(train_loss)
-            self.time_taken_each_round.append(time_taken)
+            wandb.log({"round_accuracy": train_acc, "round_loss": train_loss})
+            self.update_json_logs_list("round_accuracy", train_acc)
+            self.update_json_logs_list("round_loss", train_loss)
+
             if (round_ + 1) % print_every == 0:
-                print(f" \nAvg Training Stats after {round_ + 1} global rounds:")
-                print(f"Training Loss : {np.mean(np.array(train_loss_list[-1]))}")
-                print(
+                logging.info(f" \nAvg Training Stats after {round_ + 1} global rounds:")
+                logging.info(
+                    f"Training Loss : {np.mean(np.array(train_loss_list[-1]))}"
+                )
+                logging.info(
                     "Train Accuracy: {:.2f}% \n".format(100 * train_accuracy_list[-1])
                 )
 
@@ -250,16 +130,30 @@ class Client:
         if plot:
             self.plot(train_loss_list, train_accuracy_list)
 
+        self.update_wandb_exp(federated_clients.FedClient.function_times)
+
+        wandb.finish()
+        try:
+            with open("json_logs.json", "r") as json_file:
+                existing_data = json.load(json_file)
+        except FileNotFoundError:
+            existing_data = []
+        existing_data.append(self.json_logs)
+        with open("json_logs.json", "w+") as json_file:
+            json.dump(existing_data, json_file)
+
     def test_model(self, train_accuracy: List[float]) -> None:
         # Test inference after completion of training
         test_loader = DataLoader(self.test_dataset, batch_size=128, shuffle=False)
         test_acc, test_loss = self.client.evaluate_model(self.global_model, test_loader)
 
-        print(
+        logging.info(
             f" \n Results after {self.args.rounds} global rounds of training on encrypted model:"
         )
-        print("|---- Avg Train Accuracy: {:.2f}%".format(100 * train_accuracy[-1]))
-        print("|---- Test Accuracy: {:.2f}%".format(100 * test_acc))
+        logging.info(
+            "|---- Avg Train Accuracy: {:.2f}%".format(100 * train_accuracy[-1])
+        )
+        logging.info("|---- Test Accuracy: {:.2f}%".format(100 * test_acc))
 
         if self.args.train_without_encryption:
             # Test inference on non encrypted model after completion of training
@@ -267,10 +161,23 @@ class Client:
                 self.global_model_non_encry, test_loader
             )
 
-            print(
+            logging.info(
                 f" \n Results after {self.args.rounds} global rounds of training on non-encrypted model:"
             )
-            print("|---- Test Accuracy: {:.2f}%".format(100 * test_acc_nonencry))
+            logging.info("|---- Test Accuracy: {:.2f}%".format(100 * test_acc_nonencry))
+
+            wandb.log(
+                {
+                    "test_acc_nonencry": test_acc_nonencry,
+                    "test_loss_nonencr": test_loss_nonencr,
+                }
+            )
+            self.json_logs["test_acc_nonencry"] = test_acc_nonencry
+            self.json_logs["test_loss_nonencr"] = test_loss_nonencr
+
+        wandb.log({"test_accuracy": test_acc, "test_loss": test_loss})
+        self.json_logs["test_accuracy"] = test_acc
+        self.json_logs["test_loss"] = test_loss
 
     def save_model(self, train_loss: List[float], train_accuracy: List[float]) -> None:
         # Saving the objects train_loss and train_accuracy:
@@ -327,26 +234,39 @@ class Client:
         # Plot Time vs Phase
         plt.figure()
 
-        # Get the keys and values from the dictionary
-        phases = list(self.time_taken_each_round[0].keys())
-        times = list(self.time_taken_each_round[0].values())
+    def update_wandb_exp(self, recorded_times):
+        logging.info("LOGGING..")
 
-        # Create a bar chart
-        plt.bar(phases, times)
+        wandb.config.device = self.device
+        wandb.config.optimizer = self.args.optimizer
+        wandb.config.lr = self.args.lr
+        wandb.config.global_rounds = self.args.rounds
+        wandb.config.is_iid = self.args.iid
+        wandb.config.fed_algo = self.args.fed_algo
+        wandb.config.local_batch_size = self.args.local_bs
+        wandb.config.local_epochs = self.args.epochs
+        wandb.config.num_clients = self.args.num_clients
+        wandb.config.he_scheme_name = self.args.he_scheme_name
+        wandb.config.dataset = self.args.dataset
 
-        # Set the x and y labels
-        plt.xlabel("Phases")
-        plt.ylabel("Time Required")
+        self.json_logs["device"] = self.device
+        self.json_logs["optimizer"] = self.args.optimizer
+        self.json_logs["lr"] = self.args.lr
+        self.json_logs["global_rounds"] = self.args.rounds
+        self.json_logs["is_iid"] = self.args.iid
+        self.json_logs["fed_algo"] = self.args.fed_algo
+        self.json_logs["local_batch_size"] = self.args.local_bs
+        self.json_logs["local_epochs"] = self.args.epochs
+        self.json_logs["num_clients"] = self.args.num_clients
+        self.json_logs["he_scheme_name"] = self.args.he_scheme_name
+        self.json_logs["dataset"] = self.args.dataset
 
-        # Set the title
-        plt.title("Time Required by Each Phase")
-        plt.savefig(
-            "../reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_time.png".format(
-                self.args.fed_algo,
-                self.args.dataset,
-                self.args.rounds,
-                self.args.iid,
-                self.args.epochs,
-                self.args.local_bs,
-            )
-        )
+        for key, value in recorded_times.items():
+            wandb.log({key: value})
+            self.json_logs[key] = value
+
+    def update_json_logs_list(self, key, value):
+        if key in self.json_logs:
+            self.json_logs[key].append(value)
+        else:
+            self.json_logs[key] = [value]

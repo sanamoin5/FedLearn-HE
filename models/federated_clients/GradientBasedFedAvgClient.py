@@ -1,43 +1,42 @@
 import copy
 
-from .FedClient import FedClient
+from pympler import asizeof
+
+from .FedClient import FedClient, measure_time
 
 
 class GradientBasedFedAvgClient(FedClient):
-    def __init__(self, args, train_dataset, user_groups, logger, server):
-        super().__init__(args, train_dataset, user_groups, logger, server)
+    def __init__(self, args, train_dataset, user_groups, json_logs, server):
+        super().__init__(args, train_dataset, user_groups, json_logs, server)
         self.args = args
         self.print_every = 2
 
-        # Initialize train, validation and test loaders for each client
-        self.train_loader, self.valid_loader, self.test_loader = [], [], []
-        for idx in range(self.args.num_clients):
-            train_loader, valid_loader, test_loader = self.train_val_test(
-                list(self.user_groups[idx])
-            )
-            self.train_loader.append(train_loader)
-            self.valid_loader.append(valid_loader)
-            self.test_loader.append(test_loader)
-
+    @measure_time
     def aggregate_by_gradients(self, local_gradients, client_weights):
         # Get shapes of gradients
         weight_shapes = {k: v.shape for k, v in local_gradients[0].items()}
+        self.json_logs["local_weights_size"] = asizeof.asizeof(local_gradients)
 
         # Encrypt client gradients
-        encrypted_gradients = self.he.encrypt_client_weights(local_gradients)
+        encrypted_gradients = self.encrypt_weights(local_gradients)
+        self.json_logs["encrypted_weights_size"] = asizeof.asizeof(local_gradients)
 
         # Aggregate encrypted gradients
-        global_averaged_encrypted_gradients = self.server(
-            encrypted_gradients, client_weights
-        ).aggregate(self.args.he_scheme_name)
+        global_averaged_encrypted_gradients = self.aggregate_weights(
+            encrypted_gradients
+        )
+        self.json_logs["global_averaged_encrypted_weights_size"] = asizeof.asizeof(
+            global_averaged_encrypted_gradients
+        )
 
         # Decrypt and average the gradients
-        global_decrypted_averaged_gradients = self.he.decrypt_and_average_weights(
-            global_averaged_encrypted_gradients,
-            weight_shapes,
-            client_weights=sum(client_weights),
-            secret_key=self.secret_key,
+        global_decrypted_averaged_gradients = self.decrypt_weights(
+            global_averaged_encrypted_gradients, weight_shapes
         )
+        self.json_logs["global_averaged_decr_weights_size"] = asizeof.asizeof(
+            global_decrypted_averaged_gradients
+        )
+
         return global_decrypted_averaged_gradients
 
     def get_grads_for_local_models(self, local_weights, global_model):
@@ -59,13 +58,14 @@ class GradientBasedFedAvgClient(FedClient):
 
         return weights
 
-    def train_clients(self, global_model, round_, global_model_non_encry=None):
+    @measure_time
+    def train_clients(self, global_model, round_, wandb, global_model_non_encry=None):
         local_weights, local_losses, eval_acc, eval_losses = [], [], [], []
 
         # Iterate over each client
         for client_idx in range(self.args.num_clients):
             # Train local model
-            local_model, loss, time_training = self.train_local_model(
+            local_model, local_train_loss = self.train_local_model(
                 model=copy.deepcopy(global_model),
                 global_round=round_,
                 client_idx=client_idx,
@@ -73,7 +73,7 @@ class GradientBasedFedAvgClient(FedClient):
 
             # Collect local model weights and losses
             local_weights.append(copy.deepcopy(local_model.state_dict()))
-            local_losses.append(copy.deepcopy(loss))
+            local_losses.append(copy.deepcopy(local_train_loss))
 
             # Evaluate local model on test dataset
             accuracy, loss = self.evaluate_model(
@@ -81,18 +81,16 @@ class GradientBasedFedAvgClient(FedClient):
             )
             eval_acc.append(accuracy)
             eval_losses.append(loss)
+            self.update_local_training_logs(wandb, local_train_loss, accuracy, loss)
 
         local_grads = self.get_grads_for_local_models(local_weights, global_model)
         client_weights = self.get_client_weights()
         # Aggregate local model weights into global model weights
-        aggregated_grads, time_processing = self.aggregate_by_gradients(
-            local_grads, client_weights
-        )
+        aggregated_grads = self.aggregate_by_gradients(local_grads, client_weights)
 
         global_model_weights = self.update_model_weights_with_aggregated_grads(
             aggregated_grads, global_model
         )
-        time_processing["time_training_local"] = time_training
         if self.args.train_without_encryption:
             aggregated_grads_nonencr = self.server.average_weights_nonencrypted(
                 local_grads
@@ -112,5 +110,4 @@ class GradientBasedFedAvgClient(FedClient):
             train_accuracy,
             global_model_weights,
             global_model_non_encry,
-            time_processing,
         )

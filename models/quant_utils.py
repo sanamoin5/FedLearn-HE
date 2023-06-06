@@ -100,7 +100,6 @@ def get_alpha_gaus(values: ndarray, values_size: int64, num_bits: int) -> float6
 def calculate_clip_threshold_aciq_g(
     grads: ndarray, grads_sizes: List[int64], bit_width: int = 8
 ) -> List[float64]:
-    print("ACIQ bit width:", bit_width)
     res = []
     for idx in range(len(grads)):
         res.append(get_alpha_gaus(grads[idx], grads_sizes[idx], bit_width))
