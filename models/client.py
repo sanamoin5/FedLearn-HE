@@ -6,15 +6,15 @@ import time
 from typing import List
 
 import numpy as np
-import server
+import models.server as server
 import torch
 import wandb
-from args_parser import args_parser
-from models import federated_clients
-from nn_models import MnistModel, cifar_cnn
+from models.args_parser import args_parser
+import models.federated_clients as federated_clients
+from models.nn_models import MnistModel, cifar_cnn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from utils import exp_details, get_dataset
+from models.utils import exp_details, get_dataset
 
 
 server_classes = {

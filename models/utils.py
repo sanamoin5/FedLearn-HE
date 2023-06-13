@@ -6,7 +6,7 @@ from argparse import Namespace
 from typing import Dict, Set, Tuple
 
 from numpy import int64
-from sampling import (
+from models.sampling import (
     cifar_iid,
     cifar_noniid,
     mnist_iid,
@@ -24,7 +24,7 @@ def get_dataset(args: Namespace) -> Tuple[MNIST, MNIST, Dict[int, Set[int64]]]:
     """
 
     if args.dataset == "cifar":
-        data_dir = "../data/cifar/"
+        data_dir = "data/cifar/"
         apply_transform = transforms.Compose(
             [
                 transforms.ToTensor(),
@@ -54,7 +54,7 @@ def get_dataset(args: Namespace) -> Tuple[MNIST, MNIST, Dict[int, Set[int64]]]:
                 user_groups = cifar_noniid(train_dataset, args.num_clients)
 
     elif args.dataset == "mnist":
-        data_dir = "../data/mnist/"
+        data_dir = "data/mnist/"
 
         apply_transform = transforms.Compose(
             [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
