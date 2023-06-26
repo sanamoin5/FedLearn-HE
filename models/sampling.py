@@ -11,21 +11,6 @@ from torchvision import datasets, transforms
 from torchvision.datasets.mnist import MNIST
 
 
-def mnist_iid(dataset: MNIST, num_clients: int) -> Dict[int, Set[int64]]:
-    """
-    Sample I.I.D. client data from MNIST dataset
-    :param dataset:
-    :param num_clients:
-    :return: dict of image index
-    """
-    num_items = int(len(dataset) / num_clients)
-    dict_users, all_idxs = {}, [i for i in range(len(dataset))]
-    for i in range(num_clients):
-        dict_users[i] = set(np.random.choice(all_idxs, num_items, replace=False))
-        all_idxs = list(set(all_idxs) - dict_users[i])
-    return dict_users
-
-
 def mnist_noniid(dataset, num_clients):
     """
     Sample non-I.I.D client data from MNIST dataset
@@ -145,7 +130,7 @@ def mnist_noniid_unequal(dataset, num_clients):
     return dict_users
 
 
-def cifar_iid(dataset, num_clients):
+def dataset_iid(dataset, num_clients):
     """
     Sample I.I.D. client data from CIFAR10 dataset
     :param dataset:

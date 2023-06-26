@@ -53,7 +53,7 @@ class BatchCryptBasedFedAvgClient(FedClient):
     ) -> Tuple[List[ndarray], List[float64]]:
         for idx in range(len(clients_weights)):
             clients_weights[idx] = [
-                clients_weights[idx][x].numpy() for x in clients_weights[idx]
+                clients_weights[idx][x].cpu().numpy() for x in clients_weights[idx]
             ]
 
         sizes = [

@@ -38,12 +38,7 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument(
         "--momentum", type=float, default=0.5, help="SGD momentum (default: 0.5)"
     )
-    parser.add_argument(
-        "--gpu",
-        default=None,
-        help="To use cuda, set \
-                            to a specific GPU ID. Default set to use CPU.",
-    )
+
     parser.add_argument("--gpu_id", default=None, help="Use to set a gpu id")
 
     # Homomorphic encryption arguments

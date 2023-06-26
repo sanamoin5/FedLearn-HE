@@ -1,11 +1,13 @@
 import copy
 
+import torch
 from pympler import asizeof
 
-from .FedClient import FedClient, measure_time
+from .FedClient import FedClient, measure_time, WeightedFedAvgClient
 
 
-class WeightedFedAvgClient(FedClient):
+
+class MultiModalFedClient(WeightedFedAvgClient):
     def __init__(self, args, train_dataset, user_groups, json_logs, server):
         super().__init__(args, train_dataset, user_groups, json_logs, server)
         self.args = args
@@ -54,7 +56,7 @@ class WeightedFedAvgClient(FedClient):
             local_losses.append(copy.deepcopy(local_train_loss))
             # Evaluate local model on test dataset
             accuracy, loss = self.evaluate_model(
-                local_model, self.valid_loader[client_idx]
+                local_model, self.test_loader[client_idx]
             )
             eval_acc.append(accuracy)
             eval_losses.append(loss)

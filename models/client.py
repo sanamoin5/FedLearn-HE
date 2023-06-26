@@ -11,7 +11,7 @@ import torch
 import wandb
 from models.args_parser import args_parser
 import models.federated_clients as federated_clients
-from models.nn_models import MnistModel, cifar_cnn
+from models.nn_models import MnistModel, cifar_cnn, MILNetWithClinicalData
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from models.utils import exp_details, get_dataset
@@ -23,6 +23,7 @@ server_classes = {
     "GradientBasedFedAvg": server.FedAvgServer,
     "QuantFedClient": server.FedAvgServer,
     "BatchCryptClient": server.FedAvgServer,
+    "MultiModalPreFusionFedClient": server.FedAvgServer
 }
 client_classes = {
     "FedAvg": federated_clients.FedAvgClient,
@@ -30,6 +31,7 @@ client_classes = {
     "GradientBasedFedAvg": federated_clients.GradientBasedFedAvgClient,
     "QuantFedClient": federated_clients.QuantFedClient,
     "BatchCryptClient": federated_clients.BatchCryptBasedFedAvgClient,
+    "MultiModalPreFusionFedClient": federated_clients.MultiModalPreFusionFedClient
 }
 
 logging.basicConfig(
@@ -46,6 +48,8 @@ class Client:
             self.global_model = MnistModel()
         elif self.args.dataset == "cifar":
             self.global_model = cifar_cnn
+        elif self.args.dataset == "balnmp":
+            self.global_model = MILNetWithClinicalData
         else:
             exit("Error: unrecognized model")
 
@@ -53,8 +57,8 @@ class Client:
             self.args
         )  # print some details about the experiment, like dataset, model, etc.
         if self.args.gpu_id:
-            torch.cuda.set_device(self.args.gpu_id)
-        self.device = "cuda" if self.args.gpu else "cpu"
+            torch.cuda.set_device(int(self.args.gpu_id))
+        self.device = torch.device("cuda") if self.args.gpu_id else "cpu"
         self.json_logs = {}
 
         # load the dataset and divide it into user groups
@@ -140,6 +144,7 @@ class Client:
             existing_data = []
         existing_data.append(self.json_logs)
         with open("json_logs.json", "w+") as json_file:
+            print('Creating file.......')
             json.dump(existing_data, json_file)
 
     def test_model(self, train_accuracy: List[float]) -> None:
@@ -181,7 +186,7 @@ class Client:
 
     def save_model(self, train_loss: List[float], train_accuracy: List[float]) -> None:
         # Saving the objects train_loss and train_accuracy:
-        file_name = "../pretrained/{}_{}_iid[{}]_E[{}]_B[{}].pkl".format(
+        file_name = "pretrained/{}_{}_iid[{}]_E[{}]_B[{}].pkl".format(
             self.args.dataset,
             self.args.rounds,
             self.args.iid,
@@ -189,7 +194,7 @@ class Client:
             self.args.local_bs,
         )
         time.sleep(3)
-        with open(file_name, "wb") as f:
+        with open(file_name, "wb+") as f:
             pickle.dump([train_loss, train_accuracy], f)
 
     def plot(self, train_loss: List[float], train_accuracy: List[float]) -> None:
@@ -205,7 +210,7 @@ class Client:
         plt.ylabel("Training loss")
         plt.xlabel("Communication Rounds")
         plt.savefig(
-            "../reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_loss.png".format(
+            "reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_loss.png".format(
                 self.args.fed_algo,
                 self.args.dataset,
                 self.args.rounds,
@@ -222,7 +227,7 @@ class Client:
         plt.ylabel("Average Accuracy")
         plt.xlabel("Communication Rounds")
         plt.savefig(
-            "../reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_acc.png".format(
+            "reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_acc.png".format(
                 self.args.fed_algo,
                 self.args.dataset,
                 self.args.rounds,

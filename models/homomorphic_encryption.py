@@ -89,7 +89,7 @@ class HEScheme:
         for client_weights in clients_weights:
             encr_state_dict = {}
             for key, value in client_weights.items():
-                val = value.flatten()
+                val = value.flatten().cpu()
                 encr_state_dict[key] = self.encrypt_function(self.context, val)
             encr.append(encr_state_dict)
         return encr

@@ -11,6 +11,7 @@ from models.nn_models import MnistModel
 from models.server import FedAvgServer
 from numpy import int64
 from torch import nn
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets.mnist import MNIST
 
@@ -55,23 +56,17 @@ class FedClient:
         json_logs,
         server: Type[FedAvgServer],
     ) -> None:
+        self.optimizer = None
+        self.scheduler = None
         self.args = args
-        self.device = "cuda" if args.gpu else "cpu"
+        self.device = "cuda" if args.gpu_id else "cpu"
         self.dataset = dataset
         self.user_groups = user_groups
         self.server = server
         self.json_logs = json_logs
         self.criterion = nn.CrossEntropyLoss().to(self.device)
 
-        # Initialize train, validation and test loaders for each client
-        self.train_loader, self.valid_loader, self.test_loader = [], [], []
-        for idx in range(self.args.num_clients):
-            train_loader, valid_loader, test_loader = self.train_val_test(
-                list(self.user_groups[idx])
-            )
-            self.train_loader.append(train_loader)
-            self.valid_loader.append(valid_loader)
-            self.test_loader.append(test_loader)
+        self.load_dataset()
 
         # initialize homomorphic encryption
         self.he = HEScheme(self.args.he_scheme_name)
@@ -90,21 +85,26 @@ class FedClient:
             )  # save the secret key before making context public
             self.context.make_context_public()
 
-    def train_val_test(
+    def load_dataset(self):
+        # Initialize train, validation and test loaders for each client
+        self.train_loader, self.valid_loader = [], []
+        for idx in range(self.args.num_clients):
+            train_loader, valid_loader = self.train_val(
+                list(self.user_groups[idx])
+            )
+            self.train_loader.append(train_loader)
+            self.valid_loader.append(valid_loader)
+
+    def train_val(
         self, idxs: List[int64]
-    ) -> Tuple[
-        torch.utils.data.dataloader.DataLoader,
-        torch.utils.data.dataloader.DataLoader,
-        torch.utils.data.dataloader.DataLoader,
-    ]:
+    ):
         """
         Returns train, validation and test dataloaders for a given dataset
         and user indexes.
         """
         # split indexes for train, validation, and test (80, 10, 10)
-        idxs_train = idxs[: int(0.8 * len(idxs))]
-        idxs_val = idxs[int(0.8 * len(idxs)) : int(0.9 * len(idxs))]
-        idxs_test = idxs[int(0.9 * len(idxs)) :]
+        idxs_train = idxs[: int(0.9 * len(idxs))]
+        idxs_val = idxs[int(0.9 * len(idxs)) :]
 
         trainloader = DataLoader(
             DatasetSplit(self.dataset, idxs_train),
@@ -116,12 +116,8 @@ class FedClient:
             batch_size=int(len(idxs_val) / 10),
             shuffle=False,
         )
-        testloader = DataLoader(
-            DatasetSplit(self.dataset, idxs_test),
-            batch_size=int(len(idxs_test) / 10),
-            shuffle=False,
-        )
-        return trainloader, validloader, testloader
+
+        return trainloader, validloader
 
     def evaluate_model(
         self, model: MnistModel, testloader: torch.utils.data.dataloader.DataLoader
@@ -164,12 +160,14 @@ class FedClient:
         # Set optimizer for the local updates
         if self.args.optimizer == "sgd":
             self.optimizer = torch.optim.SGD(
-                model.parameters(), lr=self.args.lr, momentum=0.5
+                model.parameters(), lr=float(self.args.lr), momentum=0.5
             )
         elif self.args.optimizer == "adam":
             self.optimizer = torch.optim.Adam(
-                model.parameters(), lr=self.args.lr, weight_decay=1e-4
+                model.parameters(), lr=float(self.args.lr), weight_decay=1e-4
             )
+
+        self.scheduler = StepLR(self.optimizer, step_size=30, gamma=0.1)
 
         # Iterate over each epoch
         for epoch in range(self.args.epochs):
@@ -187,6 +185,7 @@ class FedClient:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                self.scheduler.step()
 
                 # Print the loss and global round every `print_every` batches
                 if self.args.verbose and (batch_idx % 10 == 0):
@@ -229,7 +228,7 @@ class FedClient:
 
             # Evaluate local model on test dataset
             accuracy, loss = self.evaluate_model(
-                local_model, self.test_loader[client_idx]
+                local_model, self.valid_loader[client_idx]
             )
             eval_acc.append(accuracy)
             eval_losses.append(loss)

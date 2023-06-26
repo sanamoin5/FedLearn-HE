@@ -4,3 +4,4 @@ from .FedClient import function_times
 from .GradientBasedFedAvgClient import GradientBasedFedAvgClient
 from .QuantFedClient import QuantFedClient
 from .WeightedFedAvgClient import WeightedFedAvgClient
+from .MultiModalPreFusionFedClient import MultiModalPreFusionFedClient

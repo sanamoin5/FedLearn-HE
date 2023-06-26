@@ -1,5 +1,6 @@
 import copy
 
+import torch
 from pympler import asizeof
 
 from .FedClient import FedClient, measure_time
@@ -36,6 +37,9 @@ class GradientBasedFedAvgClient(FedClient):
         self.json_logs["global_averaged_decr_weights_size"] = asizeof.asizeof(
             global_decrypted_averaged_gradients
         )
+
+        for key, value in global_decrypted_averaged_gradients.items():
+            global_decrypted_averaged_gradients[key] = value.to(self.device)
 
         return global_decrypted_averaged_gradients
 
@@ -77,7 +81,7 @@ class GradientBasedFedAvgClient(FedClient):
 
             # Evaluate local model on test dataset
             accuracy, loss = self.evaluate_model(
-                local_model, self.test_loader[client_idx]
+                local_model, self.valid_loader[client_idx]
             )
             eval_acc.append(accuracy)
             eval_losses.append(loss)
