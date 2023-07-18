@@ -11,7 +11,7 @@ import torch
 import wandb
 from models.args_parser import args_parser
 import models.federated_clients as federated_clients
-from models.nn_models import MnistModel, cifar_cnn, MILNetWithClinicalData
+from models.nn_models import MNIST_CNN, MNIST_2NN_MLP, CIFAR10_CNN, CIFAR10_ResNet, MILNetWithClinicalData
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from models.utils import exp_details, get_dataset
@@ -44,12 +44,16 @@ class Client:
         wandb.init(project="FedLearn-HE")
         self.args = args_parser()  # parse command line arguments
         # BUILD MODEL
-        if self.args.dataset == "mnist":
-            self.global_model = MnistModel()
-        elif self.args.dataset == "cifar":
-            self.global_model = cifar_cnn
-        elif self.args.dataset == "balnmp":
-            self.global_model = MILNetWithClinicalData
+        if self.args.model == "mnist_cnn":
+            self.global_model = MNIST_CNN()
+        elif self.args.model == "mnist_2nn":
+            self.global_model = MNIST_2NN_MLP()
+        elif self.args.model == "cifar_cnn":
+            self.global_model = CIFAR10_CNN()
+        elif self.args.model == "cifar_resnet":
+            self.global_model = CIFAR10_ResNet()
+        elif self.args.model == "balnmp":
+            self.global_model = MILNetWithClinicalData(num_classes=2, backbone_name="vgg16_bn")
         else:
             exit("Error: unrecognized model")
 
@@ -187,7 +191,7 @@ class Client:
     def save_model(self, train_loss: List[float], train_accuracy: List[float]) -> None:
         # Saving the objects train_loss and train_accuracy:
         file_name = "pretrained/{}_{}_iid[{}]_E[{}]_B[{}].pkl".format(
-            self.args.dataset,
+            self.args.model,
             self.args.rounds,
             self.args.iid,
             self.args.epochs,
@@ -212,7 +216,7 @@ class Client:
         plt.savefig(
             "reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_loss.png".format(
                 self.args.fed_algo,
-                self.args.dataset,
+                self.args.model,
                 self.args.rounds,
                 self.args.iid,
                 self.args.epochs,
@@ -229,7 +233,7 @@ class Client:
         plt.savefig(
             "reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_acc.png".format(
                 self.args.fed_algo,
-                self.args.dataset,
+                self.args.model,
                 self.args.rounds,
                 self.args.iid,
                 self.args.epochs,
@@ -252,7 +256,7 @@ class Client:
         wandb.config.local_epochs = self.args.epochs
         wandb.config.num_clients = self.args.num_clients
         wandb.config.he_scheme_name = self.args.he_scheme_name
-        wandb.config.dataset = self.args.dataset
+        wandb.config.dataset = self.args.model
 
         self.json_logs["device"] = self.device
         self.json_logs["optimizer"] = self.args.optimizer
@@ -264,7 +268,7 @@ class Client:
         self.json_logs["local_epochs"] = self.args.epochs
         self.json_logs["num_clients"] = self.args.num_clients
         self.json_logs["he_scheme_name"] = self.args.he_scheme_name
-        self.json_logs["dataset"] = self.args.dataset
+        self.json_logs["dataset"] = self.args.model
 
         for key, value in recorded_times.items():
             wandb.log({key: value})

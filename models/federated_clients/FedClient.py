@@ -7,14 +7,13 @@ from typing import Dict, List, Set, Tuple, Type
 import torch
 import torch.utils.data.dataloader
 from models.homomorphic_encryption import HEScheme
-from models.nn_models import MnistModel
+from models.nn_models import MNIST_CNN
 from models.server import FedAvgServer
 from numpy import int64
 from torch import nn
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets.mnist import MNIST
-
 
 function_times = {}
 
@@ -47,14 +46,29 @@ class DatasetSplit(Dataset):
         return torch.tensor(image), torch.tensor(label)
 
 
+class DatasetSplit2(torch.utils.data.Dataset):
+    """Custom dataset class for splitting a dataset based on indices."""
+
+    def __init__(self, dataset, indices):
+        self.dataset = dataset
+        self.indices = indices
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, index):
+        original_index = self.indices[index]
+        return self.dataset[original_index]
+
+
 class FedClient:
     def __init__(
-        self,
-        args: Namespace,
-        dataset: MNIST,
-        user_groups: Dict[int, Set[int64]],
-        json_logs,
-        server: Type[FedAvgServer],
+            self,
+            args: Namespace,
+            dataset: MNIST,
+            user_groups: Dict[int, Set[int64]],
+            json_logs,
+            server: Type[FedAvgServer],
     ) -> None:
         self.optimizer = None
         self.scheduler = None
@@ -96,7 +110,7 @@ class FedClient:
             self.valid_loader.append(valid_loader)
 
     def train_val(
-        self, idxs: List[int64]
+            self, idxs: List[int64]
     ):
         """
         Returns train, validation and test dataloaders for a given dataset
@@ -104,7 +118,7 @@ class FedClient:
         """
         # split indexes for train, validation, and test (80, 10, 10)
         idxs_train = idxs[: int(0.9 * len(idxs))]
-        idxs_val = idxs[int(0.9 * len(idxs)) :]
+        idxs_val = idxs[int(0.9 * len(idxs)):]
 
         trainloader = DataLoader(
             DatasetSplit(self.dataset, idxs_train),
@@ -120,13 +134,16 @@ class FedClient:
         return trainloader, validloader
 
     def evaluate_model(
-        self, model: MnistModel, testloader: torch.utils.data.dataloader.DataLoader
+            self, model: MNIST_CNN, testloader: torch.utils.data.dataloader.DataLoader
     ) -> Tuple[float, float]:
         """Returns the inference accuracy and loss."""
         model.eval()
         loss, total, correct = 0.0, 0.0, 0.0
-
+        for batch_idx, b in enumerate(testloader):
+            print(batch_idx)
+            print(b)
         for batch_idx, (images, labels) in enumerate(testloader):
+            print(batch_idx)
             images, labels = images.to(self.device), labels.to(self.device)
 
             # Inference
@@ -151,8 +168,8 @@ class FedClient:
 
     @measure_time
     def train_local_model(
-        self, model: MnistModel, global_round: int, client_idx: int
-    ) -> Tuple[MnistModel, float]:
+            self, model: MNIST_CNN, global_round: int, client_idx: int
+    ) -> Tuple[MNIST_CNN, float]:
         # Set mode to train model
         model.train()
         epoch_loss = []
@@ -164,10 +181,10 @@ class FedClient:
             )
         elif self.args.optimizer == "adam":
             self.optimizer = torch.optim.Adam(
-                model.parameters(), lr=float(self.args.lr), weight_decay=1e-4
+                model.parameters(), lr=float(self.args.lr), weight_decay=3.2e-6
             )
-
-        self.scheduler = StepLR(self.optimizer, step_size=30, gamma=0.1)
+        if self.args.lr_scheduler != None:
+            self.scheduler = StepLR(self.optimizer, step_size=30, gamma=0.1)
 
         # Iterate over each epoch
         for epoch in range(self.args.epochs):
@@ -175,17 +192,18 @@ class FedClient:
 
             for batch_idx, (images, labels) in enumerate(self.train_loader[client_idx]):
                 images, labels = images.to(self.device), labels.to(self.device)
-
+                # Zero the gradients
+                self.optimizer.zero_grad()
                 # Compute the forward pass
                 log_probs = model(images)
 
                 loss = self.criterion(log_probs, labels)
 
-                # Zero the gradients
-                self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                self.scheduler.step()
+
+                if self.args.lr_scheduler != None:
+                    self.scheduler.step()
 
                 # Print the loss and global round every `print_every` batches
                 if self.args.verbose and (batch_idx % 10 == 0):
@@ -248,7 +266,7 @@ class FedClient:
         return (train_loss, train_accuracy, aggregated_weights, global_model_non_encry)
 
     def update_local_training_logs(
-        self, wandb, local_train_loss, local_eval_accuracy, local_eval_loss
+            self, wandb, local_train_loss, local_eval_accuracy, local_eval_loss
     ):
         wandb.log({"local_train_loss": local_train_loss})
         wandb.log(

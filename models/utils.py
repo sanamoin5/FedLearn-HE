@@ -107,7 +107,7 @@ def get_dataset(args):
     each of those users.
     """
 
-    if args.dataset == "cifar":
+    if args.model == "cifar_cnn" or args.model == "cifar_resnet" :
         data_dir = "data/cifar/"
         apply_transform = transforms.Compose(
             [
@@ -137,7 +137,7 @@ def get_dataset(args):
                 # Chose equal splits for every user
                 user_groups = cifar_noniid(train_dataset, args.num_clients)
 
-    elif args.dataset == "mnist":
+    elif args.model == "mnist_cnn" or args.model == "mnist_2nn":
         data_dir = "data/mnist/"
 
         apply_transform = transforms.Compose(
@@ -165,15 +165,15 @@ def get_dataset(args):
                 # Chose euqal splits for every user
                 user_groups = mnist_noniid(train_dataset, args.num_clients)
 
-    elif args.dataset == "balnmp":
+    elif args.model == "balnmp":
         data_dir = "data/balnmp/"
-        train_dataset = BreastDataset(os.path.join(data_dir, 'json/train-type-3.json'), data_dir, os.path.join(data_dir,'clinical_data/preprocessed-type-3.xlsx'),
+        train_dataset = BreastDataset(os.path.join(data_dir, 'json/train-type-3-test.json'), data_dir, os.path.join(data_dir,'clinical_data/preprocessed-type-3.xlsx'),
                                       is_preloading=False)
 
-        val_dataset = BreastDataset(os.path.join(data_dir, 'json/val-type-3.json'), data_dir, os.path.join(data_dir,'clinical_data/preprocessed-type-3.xlsx'),
+        val_dataset = BreastDataset(os.path.join(data_dir, 'json/val-type-3-test.json'), data_dir, os.path.join(data_dir,'clinical_data/preprocessed-type-3.xlsx'),
                                     is_preloading=False)
 
-        test_dataset = BreastDataset(os.path.join(data_dir, 'json/test-type-3.json'), data_dir, os.path.join(data_dir,'clinical_data/preprocessed-type-3.xlsx'),
+        test_dataset = BreastDataset(os.path.join(data_dir, 'json/test-type-3-test.json'), data_dir, os.path.join(data_dir,'clinical_data/preprocessed-type-3.xlsx'),
                                      is_preloading=False)
 
         # sample training data amongst users
