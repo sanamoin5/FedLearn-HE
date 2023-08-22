@@ -58,7 +58,8 @@ class GradientBasedFedAvgClient(FedClient):
         weights = model.state_dict()
 
         for name, grad in aggregated_grads.items():
-            weights[name] -= grad
+            if len(weights[name].size()) != 0:
+                weights[name] -= grad
 
         return weights
 

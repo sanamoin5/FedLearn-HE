@@ -5,3 +5,4 @@ from .GradientBasedFedAvgClient import GradientBasedFedAvgClient
 from .QuantFedClient import QuantFedClient
 from .WeightedFedAvgClient import WeightedFedAvgClient
 from .MultiModalPreFusionFedClient import MultiModalPreFusionFedClient
+from .FedAvgClientWithoutEncryption import FedAvgClientWithoutEncryption

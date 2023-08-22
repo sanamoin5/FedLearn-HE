@@ -139,11 +139,7 @@ class FedClient:
         """Returns the inference accuracy and loss."""
         model.eval()
         loss, total, correct = 0.0, 0.0, 0.0
-        for batch_idx, b in enumerate(testloader):
-            print(batch_idx)
-            print(b)
         for batch_idx, (images, labels) in enumerate(testloader):
-            print(batch_idx)
             images, labels = images.to(self.device), labels.to(self.device)
 
             # Inference
@@ -177,7 +173,7 @@ class FedClient:
         # Set optimizer for the local updates
         if self.args.optimizer == "sgd":
             self.optimizer = torch.optim.SGD(
-                model.parameters(), lr=float(self.args.lr), momentum=0.5
+                model.parameters(), lr=float(self.args.lr), momentum=float(self.args.momentum), weight_decay=float(self.args.weight_decay)
             )
         elif self.args.optimizer == "adam":
             self.optimizer = torch.optim.Adam(
@@ -185,6 +181,8 @@ class FedClient:
             )
         if self.args.lr_scheduler != None:
             self.scheduler = StepLR(self.optimizer, step_size=30, gamma=0.1)
+        elif self.args.lr_scheduler=='CosineAnneralingLR':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=200)
 
         # Iterate over each epoch
         for epoch in range(self.args.epochs):
@@ -298,6 +296,10 @@ class FedClient:
     @measure_time
     def aggregate_weights(self, weights):
         return self.server(weights).aggregate(self.args.he_scheme_name)
+
+    @measure_time
+    def aggregate_weights_nonencrypted(self, weights):
+        return self.server.average_weights_nonencrypted(weights)
 
     @measure_time
     def decrypt_weights(self, weights, weight_shapes):

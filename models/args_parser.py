@@ -15,7 +15,7 @@ def args_parser() -> argparse.Namespace:
         "--rounds",
         type=int,
         default=10,
-        help="number of rounds of training ()Default: 10",
+        help="number of rounds of training (Default: 10)",
     )
     parser.add_argument(
         "--num_clients", type=int, default=2, help="number of clients (Default: 2)"
@@ -131,6 +131,19 @@ def args_parser() -> argparse.Namespace:
         help="type \
                         of optimizer",
     )
+
+    parser.add_argument(
+        "--weight_decay",
+        type=float,
+        default=5e-4,
+        help="weight decay for sgd optimizer(default=5e-4)",
+    )
+    parser.add_argument(
+        "--test_dataset_bs",
+        type=int,
+        default=128,
+        help="batch size of test dataset( Default: 128)",
+    )
     parser.add_argument(
         "--lr_scheduler",
         type=str,
@@ -141,6 +154,13 @@ def args_parser() -> argparse.Namespace:
         "--iid", type=int, default=1, help="Default set to IID. Set to 0 for non-IID."
     )
 
+    parser.add_argument(
+        "--balnmp_data_type",
+        type=str,
+        choices=["type-1", "type-2", "type-3", "type-3-test"],
+        default="type-3",
+        help="For balnmp, select the type of data to run. Default is type-3",
+    )
     parser.add_argument(
         "--merge_method",
         type=str,

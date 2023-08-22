@@ -1,56 +1,38 @@
 import torch
-from pympler import asizeof
-from .FedClient import measure_time, DatasetSplit, DatasetSplit2
-from .WeightedFedAvgClient import WeightedFedAvgClient
+from .FedClient import measure_time, DatasetSplit2
+from .QuantFedClient import QuantFedClient
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import numpy as np
 import pandas as pd
 
 
-class MultiModalPreFusionFedClient(WeightedFedAvgClient):
+class MultiModalPreFusionFedClient(QuantFedClient):
     def __init__(self, args, train_dataset, user_groups, json_logs, server):
         super().__init__(args, train_dataset, user_groups, json_logs, server)
         self.args = args
         self.print_every = 2
-
-    def load_dataset(self):
-        # Initialize train, validation and test loaders for each client
-        self.train_loader, self.valid_loader = [], []
-        for idx in range(self.args.num_clients):
-            train_loader = DataLoader(
-                DatasetSplit2(self.dataset[0], list(self.user_groups[0][idx])),
-                batch_size=self.args.local_bs,
-                shuffle=True,
-                pin_memory=True
-            )
-
-            valid_loader = DataLoader(
-                DatasetSplit2(self.dataset[1], list(self.user_groups[1][idx])),
-                batch_size=self.args.local_bs,
-                shuffle=False,
-                pin_memory=True
-            )
-            self.train_loader.append(train_loader)
-            self.valid_loader.append(valid_loader)
 
     def train_val(self, idxs):
         """
         Returns train, validation and test dataloaders for a given dataset
         and user indexes.
         """
+
+        idxs_train = idxs[: int(0.8 * len(idxs))]
+        idxs_val = idxs[int(0.8 * len(idxs)):]
+
         trainloader = DataLoader(
-            DatasetSplit2(self.dataset[0], list(idxs[0])),
-            batch_size=self.args.local_bs,
+            DatasetSplit2(self.dataset, idxs_train),
+            batch_size=1,
             shuffle=True,
-            pin_memory=True
         )
         validloader = DataLoader(
-            DatasetSplit2(self.dataset[1], list(idxs[1])),
-            batch_size=self.args.local_bs,
+            DatasetSplit2(self.dataset, idxs_val),
+            batch_size=1,
             shuffle=False,
-            pin_memory=True
         )
+
         return trainloader, validloader
 
     @measure_time
@@ -135,6 +117,7 @@ class MultiModalPreFusionFedClient(WeightedFedAvgClient):
         df["score"] = df["score"].apply(merge_method, args=(0,))
 
         return df["id"].tolist(), df["label"].tolist(), df["score"].tolist(), df["bag_num"].tolist()
+
     def evaluate_model(self, model, testloader):
         """Returns the inference accuracy and loss."""
         total_loss = 0
@@ -150,8 +133,13 @@ class MultiModalPreFusionFedClient(WeightedFedAvgClient):
             for index, item in enumerate(testloader, start=1):
                 bag_tensor, label = item["bag_tensor"].cuda(), item["label"].cuda()
                 clinical_data = item["clinical_data"][0].cuda() if "clinical_data" in item else None
+                clinical_data, aggregated_feature, attention = model(bag_tensor, clinical_data)
+                fused_data = torch.cat([aggregated_feature, clinical_data.repeat(1, model.expand_times).float()],
+                                       dim=-1)
+                # feature fusion
+                output = model.classifier(fused_data)
 
-                output, attention_value = model(bag_tensor, clinical_data)
+                # output, attention_value = model(bag_tensor, clinical_data)
                 loss = F.cross_entropy(output, label)
                 total_loss += loss.item()
 
@@ -161,8 +149,7 @@ class MultiModalPreFusionFedClient(WeightedFedAvgClient):
                     1].cpu().item()  # use the predicted positive probability as score
                 score_list.append(score)
                 patch_path_list.extend([p[0] for p in item["patch_paths"]])
-                attention_value_list.extend(attention_value[0].cpu().tolist())
-
+                attention_value_list.extend(attention[0].cpu().tolist())
 
         if self.args.merge_method != "not_use":
             id_list, label_list, score_list, bag_num_list = self.merge_result(id_list, label_list, score_list,

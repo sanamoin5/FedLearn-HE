@@ -1,3 +1,4 @@
+import os
 import copy
 import json
 import logging
@@ -19,6 +20,7 @@ from models.utils import exp_details, get_dataset
 
 server_classes = {
     "FedAvg": server.FedAvgServer,
+    "FedAvgWithoutEncryption": server.FedAvgServer,
     "WeightedFedAvg": server.FedAvgServer,
     "GradientBasedFedAvg": server.FedAvgServer,
     "QuantFedClient": server.FedAvgServer,
@@ -27,6 +29,7 @@ server_classes = {
 }
 client_classes = {
     "FedAvg": federated_clients.FedAvgClient,
+    "FedAvgWithoutEncryption": federated_clients.FedAvgClientWithoutEncryption,
     "WeightedFedAvg": federated_clients.WeightedFedAvgClient,
     "GradientBasedFedAvg": federated_clients.GradientBasedFedAvgClient,
     "QuantFedClient": federated_clients.QuantFedClient,
@@ -41,7 +44,7 @@ logging.basicConfig(
 
 class Client:
     def __init__(self) -> None:
-        wandb.init(project="FedLearn-HE")
+        wandb.init(project="FedLearn-HE-Experiments")
         self.args = args_parser()  # parse command line arguments
         # BUILD MODEL
         if self.args.model == "mnist_cnn":
@@ -51,7 +54,7 @@ class Client:
         elif self.args.model == "cifar_cnn":
             self.global_model = CIFAR10_CNN()
         elif self.args.model == "cifar_resnet":
-            self.global_model = CIFAR10_ResNet()
+            self.global_model = CIFAR10_ResNet
         elif self.args.model == "balnmp":
             self.global_model = MILNetWithClinicalData(num_classes=2, backbone_name="vgg16_bn")
         else:
@@ -142,18 +145,22 @@ class Client:
 
         wandb.finish()
         try:
-            with open("json_logs.json", "r") as json_file:
-                existing_data = json.load(json_file)
+            json_file_path = "json_logs_test.json"
+            if os.path.exists(json_file_path):
+                with open(json_file_path, 'r') as file:
+                    existing_data = json.load(file)
+            else:
+                existing_data = []
         except FileNotFoundError:
             existing_data = []
         existing_data.append(self.json_logs)
-        with open("json_logs.json", "w+") as json_file:
+        with open("json_logs_test.json", "w+") as json_file:
             print('Creating file.......')
             json.dump(existing_data, json_file)
 
     def test_model(self, train_accuracy: List[float]) -> None:
         # Test inference after completion of training
-        test_loader = DataLoader(self.test_dataset, batch_size=128, shuffle=False)
+        test_loader = DataLoader(self.test_dataset, batch_size=self.args.test_dataset_bs, shuffle=False)
         test_acc, test_loss = self.client.evaluate_model(self.global_model, test_loader)
 
         logging.info(
@@ -258,17 +265,17 @@ class Client:
         wandb.config.he_scheme_name = self.args.he_scheme_name
         wandb.config.dataset = self.args.model
 
-        self.json_logs["device"] = self.device
-        self.json_logs["optimizer"] = self.args.optimizer
+        self.json_logs["device"] = str(self.device)
+        self.json_logs["optimizer"] = str(self.args.optimizer)
         self.json_logs["lr"] = self.args.lr
-        self.json_logs["global_rounds"] = self.args.rounds
-        self.json_logs["is_iid"] = self.args.iid
-        self.json_logs["fed_algo"] = self.args.fed_algo
+        self.json_logs["global_rounds"] = str(self.args.rounds)
+        self.json_logs["is_iid"] = str(self.args.iid)
+        self.json_logs["fed_algo"] = str(self.args.fed_algo)
         self.json_logs["local_batch_size"] = self.args.local_bs
         self.json_logs["local_epochs"] = self.args.epochs
         self.json_logs["num_clients"] = self.args.num_clients
-        self.json_logs["he_scheme_name"] = self.args.he_scheme_name
-        self.json_logs["dataset"] = self.args.model
+        self.json_logs["he_scheme_name"] = str(self.args.he_scheme_name)
+        self.json_logs["dataset"] = str(self.args.model)
 
         for key, value in recorded_times.items():
             wandb.log({key: value})
