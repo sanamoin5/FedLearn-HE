@@ -196,11 +196,11 @@ def get_dataset(args):
 
         train_dataset = BreastDataset(json_train_val_data, data_dir,
                                       os.path.join(data_dir, 'clinical_data/preprocessed-' +
-                                                   balnmp_data_type + '.xlsx'), is_preloading=False)
+                                                   balnmp_data_type + '.xlsx'), is_preloading=True)
 
         test_dataset = BreastDataset(json_test_data, data_dir,
                                      os.path.join(data_dir, 'clinical_data/preprocessed-' +
-                                                  balnmp_data_type + '.xlsx'), is_preloading=False)
+                                                  balnmp_data_type + '.xlsx'),  is_preloading=True)
 
         # sample training data amongst users
         if args.iid:

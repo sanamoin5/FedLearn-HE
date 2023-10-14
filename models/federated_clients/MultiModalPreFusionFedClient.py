@@ -1,13 +1,16 @@
 import torch
 from .FedClient import measure_time, DatasetSplit2
-from .QuantFedClient import QuantFedClient
+from .BatchCryptFedClient import BatchCryptBasedFedAvgClient
+from .FedAvgClientWithoutEncryption import FedAvgClientWithoutEncryption
+from .FedAvgClient import FedAvgClient
+from .GradientBasedFedAvgClient import GradientBasedFedAvgClient
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import numpy as np
 import pandas as pd
 
 
-class MultiModalPreFusionFedClient(QuantFedClient):
+class MultiModalPreFusionFedClient(FedAvgClientWithoutEncryption):
     def __init__(self, args, train_dataset, user_groups, json_logs, server):
         super().__init__(args, train_dataset, user_groups, json_logs, server)
         self.args = args
@@ -40,11 +43,11 @@ class MultiModalPreFusionFedClient(QuantFedClient):
         # Set optimizer for the local updates
         if self.args.optimizer == "sgd":
             self.optimizer = torch.optim.SGD(
-                model.parameters(), lr=float(self.args.lr), momentum=0.5
+                model.parameters(), lr=float(self.args.lr), momentum=float(self.args.momentum)
             )
         elif self.args.optimizer == "adam":
             self.optimizer = torch.optim.Adam(
-                model.parameters(), lr=float(self.args.lr), weight_decay=1e-4
+                model.parameters(), lr=float(self.args.lr), weight_decay=float(self.args.weight_decay)
             )
         total_loss = 0
         label_list = []
