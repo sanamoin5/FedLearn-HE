@@ -1,3 +1,4 @@
+import os
 import copy
 import json
 import logging
@@ -11,7 +12,7 @@ import torch
 import wandb
 from models.args_parser import args_parser
 import models.federated_clients as federated_clients
-from models.nn_models import MnistModel, cifar_cnn
+from models.nn_models import MNIST_CNN, MNIST_2NN_MLP, CIFAR10_CNN, CIFAR10_ResNet, MILNetWithClinicalData
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from models.utils import exp_details, get_dataset
@@ -19,17 +20,21 @@ from models.utils import exp_details, get_dataset
 
 server_classes = {
     "FedAvg": server.FedAvgServer,
+    "FedAvgWithoutEncryption": server.FedAvgServer,
     "WeightedFedAvg": server.FedAvgServer,
     "GradientBasedFedAvg": server.FedAvgServer,
     "QuantFedClient": server.FedAvgServer,
     "BatchCryptClient": server.FedAvgServer,
+    "MultiModalPreFusionFedClient": server.FedAvgServer
 }
 client_classes = {
     "FedAvg": federated_clients.FedAvgClient,
+    "FedAvgWithoutEncryption": federated_clients.FedAvgClientWithoutEncryption,
     "WeightedFedAvg": federated_clients.WeightedFedAvgClient,
     "GradientBasedFedAvg": federated_clients.GradientBasedFedAvgClient,
     "QuantFedClient": federated_clients.QuantFedClient,
     "BatchCryptClient": federated_clients.BatchCryptBasedFedAvgClient,
+    "MultiModalPreFusionFedClient": federated_clients.MultiModalPreFusionFedClient
 }
 
 logging.basicConfig(
@@ -39,13 +44,19 @@ logging.basicConfig(
 
 class Client:
     def __init__(self) -> None:
-        wandb.init(project="FedLearn-HE")
+        wandb.init(project="FedLearn-HE-Experiments")
         self.args = args_parser()  # parse command line arguments
         # BUILD MODEL
-        if self.args.dataset == "mnist":
-            self.global_model = MnistModel()
-        elif self.args.dataset == "cifar":
-            self.global_model = cifar_cnn
+        if self.args.model == "mnist_cnn":
+            self.global_model = MNIST_CNN()
+        elif self.args.model == "mnist_2nn":
+            self.global_model = MNIST_2NN_MLP()
+        elif self.args.model == "cifar_cnn":
+            self.global_model = CIFAR10_CNN()
+        elif self.args.model == "cifar_resnet":
+            self.global_model = CIFAR10_ResNet
+        elif self.args.model == "balnmp":
+            self.global_model = MILNetWithClinicalData(num_classes=2, backbone_name="vgg16_bn")
         else:
             exit("Error: unrecognized model")
 
@@ -53,8 +64,8 @@ class Client:
             self.args
         )  # print some details about the experiment, like dataset, model, etc.
         if self.args.gpu_id:
-            torch.cuda.set_device(self.args.gpu_id)
-        self.device = "cuda" if self.args.gpu else "cpu"
+            torch.cuda.set_device(int(self.args.gpu_id))
+        self.device = torch.device("cuda") if self.args.gpu_id else "cpu"
         self.json_logs = {}
 
         # load the dataset and divide it into user groups
@@ -134,17 +145,22 @@ class Client:
 
         wandb.finish()
         try:
-            with open("json_logs.json", "r") as json_file:
-                existing_data = json.load(json_file)
+            json_file_path = "json_logs_test.json"
+            if os.path.exists(json_file_path):
+                with open(json_file_path, 'r') as file:
+                    existing_data = json.load(file)
+            else:
+                existing_data = []
         except FileNotFoundError:
             existing_data = []
         existing_data.append(self.json_logs)
-        with open("json_logs.json", "w+") as json_file:
+        with open("json_logs_test.json", "w+") as json_file:
+            print('Creating file.......')
             json.dump(existing_data, json_file)
 
     def test_model(self, train_accuracy: List[float]) -> None:
         # Test inference after completion of training
-        test_loader = DataLoader(self.test_dataset, batch_size=128, shuffle=False)
+        test_loader = DataLoader(self.test_dataset, batch_size=self.args.test_dataset_bs, shuffle=False)
         test_acc, test_loss = self.client.evaluate_model(self.global_model, test_loader)
 
         logging.info(
@@ -181,15 +197,15 @@ class Client:
 
     def save_model(self, train_loss: List[float], train_accuracy: List[float]) -> None:
         # Saving the objects train_loss and train_accuracy:
-        file_name = "../pretrained/{}_{}_iid[{}]_E[{}]_B[{}].pkl".format(
-            self.args.dataset,
+        file_name = "pretrained/{}_{}_iid[{}]_E[{}]_B[{}].pkl".format(
+            self.args.model,
             self.args.rounds,
             self.args.iid,
             self.args.epochs,
             self.args.local_bs,
         )
         time.sleep(3)
-        with open(file_name, "wb") as f:
+        with open(file_name, "wb+") as f:
             pickle.dump([train_loss, train_accuracy], f)
 
     def plot(self, train_loss: List[float], train_accuracy: List[float]) -> None:
@@ -205,9 +221,9 @@ class Client:
         plt.ylabel("Training loss")
         plt.xlabel("Communication Rounds")
         plt.savefig(
-            "../reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_loss.png".format(
+            "reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_loss.png".format(
                 self.args.fed_algo,
-                self.args.dataset,
+                self.args.model,
                 self.args.rounds,
                 self.args.iid,
                 self.args.epochs,
@@ -222,9 +238,9 @@ class Client:
         plt.ylabel("Average Accuracy")
         plt.xlabel("Communication Rounds")
         plt.savefig(
-            "../reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_acc.png".format(
+            "reports/fed_{}_{}_{}_iid[{}]_E[{}]_B[{}]_acc.png".format(
                 self.args.fed_algo,
-                self.args.dataset,
+                self.args.model,
                 self.args.rounds,
                 self.args.iid,
                 self.args.epochs,
@@ -247,19 +263,19 @@ class Client:
         wandb.config.local_epochs = self.args.epochs
         wandb.config.num_clients = self.args.num_clients
         wandb.config.he_scheme_name = self.args.he_scheme_name
-        wandb.config.dataset = self.args.dataset
+        wandb.config.dataset = self.args.model
 
-        self.json_logs["device"] = self.device
-        self.json_logs["optimizer"] = self.args.optimizer
+        self.json_logs["device"] = str(self.device)
+        self.json_logs["optimizer"] = str(self.args.optimizer)
         self.json_logs["lr"] = self.args.lr
-        self.json_logs["global_rounds"] = self.args.rounds
-        self.json_logs["is_iid"] = self.args.iid
-        self.json_logs["fed_algo"] = self.args.fed_algo
+        self.json_logs["global_rounds"] = str(self.args.rounds)
+        self.json_logs["is_iid"] = str(self.args.iid)
+        self.json_logs["fed_algo"] = str(self.args.fed_algo)
         self.json_logs["local_batch_size"] = self.args.local_bs
         self.json_logs["local_epochs"] = self.args.epochs
         self.json_logs["num_clients"] = self.args.num_clients
-        self.json_logs["he_scheme_name"] = self.args.he_scheme_name
-        self.json_logs["dataset"] = self.args.dataset
+        self.json_logs["he_scheme_name"] = str(self.args.he_scheme_name)
+        self.json_logs["dataset"] = str(self.args.model)
 
         for key, value in recorded_times.items():
             wandb.log({key: value})

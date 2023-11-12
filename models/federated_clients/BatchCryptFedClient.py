@@ -53,7 +53,7 @@ class BatchCryptBasedFedAvgClient(FedClient):
     ) -> Tuple[List[ndarray], List[float64]]:
         for idx in range(len(clients_weights)):
             clients_weights[idx] = [
-                clients_weights[idx][x].numpy() for x in clients_weights[idx]
+                clients_weights[idx][x].cpu().numpy() for x in clients_weights[idx]
             ]
 
         sizes = [
@@ -89,7 +89,7 @@ class BatchCryptBasedFedAvgClient(FedClient):
         for client_weights in clients_weights:
             ordered_dict = OrderedDict()
             for i, layer_name in enumerate(layer_names):
-                ordered_dict[layer_name] = client_weights[i]
+                ordered_dict[layer_name] = torch.from_numpy(np.asarray(client_weights[i]))
             client_weights_ordereddict.append(ordered_dict)
         return client_weights_ordereddict
 

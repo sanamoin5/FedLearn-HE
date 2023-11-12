@@ -32,15 +32,21 @@ class HEScheme:
         if he_scheme_name == "ckks":
             self.init_ckks()
             self.encrypt_client_weights = self.encrypt_client_weights_ckks_bfv
+            self.encrypt_feature = self.encrypt_client_weights_ckks_bfv
             self.decrypt_and_average_weights = self.decrypt_and_average_weights_ckks_bfv
+            self.decrypt_and_average_feature = self.decrypt_and_average_weights_ckks_bfv
         elif he_scheme_name == "paillier":
             self.init_paillier()
             self.encrypt_client_weights = self.encrypt_client_weights_paillier
+            self.encrypt_feature = self.encrypt_feature_paillier
             self.decrypt_and_average_weights = self.decrypt_and_average_weights_paillier
+            self.decrypt_and_average_feature = self.decrypt_and_average_feature_paillier
         elif he_scheme_name == "bfv":
             self.init_bfv()
             self.encrypt_client_weights = self.encrypt_client_weights_ckks_bfv
+            self.encrypt_feature = self.encrypt_client_weights_ckks_bfv
             self.decrypt_and_average_weights = self.decrypt_and_average_weights_ckks_bfv
+            self.decrypt_and_average_feature = self.decrypt_and_average_weights_ckks_bfv
 
     def init_ckks(self) -> None:
         # controls precision of the fractional part
@@ -88,8 +94,9 @@ class HEScheme:
         encr = []
         for client_weights in clients_weights:
             encr_state_dict = {}
+            #image_feature_extractor.extractor.0.0.weight
             for key, value in client_weights.items():
-                val = value.flatten()
+                val = value.flatten().cpu()
                 encr_state_dict[key] = self.encrypt_function(self.context, val)
             encr.append(encr_state_dict)
         return encr
@@ -154,6 +161,17 @@ class HEScheme:
 
         return decry_model
 
+    def encrypt_feature_ckks_bfv(self):
+        pass
+
+    def encrypt_feature_paillier(self):
+        pass
+
+    def decrypt_and_average_feature_ckks_bfv(self):
+        pass
+
+    def decrypt_and_average_feature_paillier(self):
+        pass
 
 # def get_client_encrypted_grad(client_inputs, client_labels, net_dict, client_net):
 #     client_net.load_state_dict(net_dict)

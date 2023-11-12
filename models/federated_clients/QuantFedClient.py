@@ -24,7 +24,7 @@ class QuantFedClient(FedClient):
     def quantize_weights(self, clients_weights):
         for idx in range(len(clients_weights)):
             clients_weights[idx] = [
-                clients_weights[idx][x].numpy() for x in clients_weights[idx]
+                clients_weights[idx][x].numpy().cpu() for x in clients_weights[idx]
             ]
 
         # clipping_thresholds = encryption.calculate_clip_threshold(grads_0)

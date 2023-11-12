@@ -7,13 +7,13 @@ from typing import Dict, List, Set, Tuple, Type
 import torch
 import torch.utils.data.dataloader
 from models.homomorphic_encryption import HEScheme
-from models.nn_models import MnistModel
+from models.nn_models import MNIST_CNN
 from models.server import FedAvgServer
 from numpy import int64
 from torch import nn
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets.mnist import MNIST
-
 
 function_times = {}
 
@@ -46,32 +46,41 @@ class DatasetSplit(Dataset):
         return torch.tensor(image), torch.tensor(label)
 
 
+class DatasetSplit2(torch.utils.data.Dataset):
+    """Custom dataset class for splitting a dataset based on indices."""
+
+    def __init__(self, dataset, indices):
+        self.dataset = dataset
+        self.indices = indices
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, index):
+        original_index = self.indices[index]
+        return self.dataset[original_index]
+
+
 class FedClient:
     def __init__(
-        self,
-        args: Namespace,
-        dataset: MNIST,
-        user_groups: Dict[int, Set[int64]],
-        json_logs,
-        server: Type[FedAvgServer],
+            self,
+            args: Namespace,
+            dataset: MNIST,
+            user_groups: Dict[int, Set[int64]],
+            json_logs,
+            server: Type[FedAvgServer],
     ) -> None:
+        self.optimizer = None
+        self.scheduler = None
         self.args = args
-        self.device = "cuda" if args.gpu else "cpu"
+        self.device = "cuda" if args.gpu_id else "cpu"
         self.dataset = dataset
         self.user_groups = user_groups
         self.server = server
         self.json_logs = json_logs
         self.criterion = nn.CrossEntropyLoss().to(self.device)
 
-        # Initialize train, validation and test loaders for each client
-        self.train_loader, self.valid_loader, self.test_loader = [], [], []
-        for idx in range(self.args.num_clients):
-            train_loader, valid_loader, test_loader = self.train_val_test(
-                list(self.user_groups[idx])
-            )
-            self.train_loader.append(train_loader)
-            self.valid_loader.append(valid_loader)
-            self.test_loader.append(test_loader)
+        self.load_dataset()
 
         # initialize homomorphic encryption
         self.he = HEScheme(self.args.he_scheme_name)
@@ -90,21 +99,26 @@ class FedClient:
             )  # save the secret key before making context public
             self.context.make_context_public()
 
-    def train_val_test(
-        self, idxs: List[int64]
-    ) -> Tuple[
-        torch.utils.data.dataloader.DataLoader,
-        torch.utils.data.dataloader.DataLoader,
-        torch.utils.data.dataloader.DataLoader,
-    ]:
+    def load_dataset(self):
+        # Initialize train, validation and test loaders for each client
+        self.train_loader, self.valid_loader = [], []
+        for idx in range(self.args.num_clients):
+            train_loader, valid_loader = self.train_val(
+                list(self.user_groups[idx])
+            )
+            self.train_loader.append(train_loader)
+            self.valid_loader.append(valid_loader)
+
+    def train_val(
+            self, idxs: List[int64]
+    ):
         """
         Returns train, validation and test dataloaders for a given dataset
         and user indexes.
         """
         # split indexes for train, validation, and test (80, 10, 10)
-        idxs_train = idxs[: int(0.8 * len(idxs))]
-        idxs_val = idxs[int(0.8 * len(idxs)) : int(0.9 * len(idxs))]
-        idxs_test = idxs[int(0.9 * len(idxs)) :]
+        idxs_train = idxs[: int(0.9 * len(idxs))]
+        idxs_val = idxs[int(0.9 * len(idxs)):]
 
         trainloader = DataLoader(
             DatasetSplit(self.dataset, idxs_train),
@@ -116,20 +130,15 @@ class FedClient:
             batch_size=int(len(idxs_val) / 10),
             shuffle=False,
         )
-        testloader = DataLoader(
-            DatasetSplit(self.dataset, idxs_test),
-            batch_size=int(len(idxs_test) / 10),
-            shuffle=False,
-        )
-        return trainloader, validloader, testloader
+
+        return trainloader, validloader
 
     def evaluate_model(
-        self, model: MnistModel, testloader: torch.utils.data.dataloader.DataLoader
+            self, model: MNIST_CNN, testloader: torch.utils.data.dataloader.DataLoader
     ) -> Tuple[float, float]:
         """Returns the inference accuracy and loss."""
         model.eval()
         loss, total, correct = 0.0, 0.0, 0.0
-
         for batch_idx, (images, labels) in enumerate(testloader):
             images, labels = images.to(self.device), labels.to(self.device)
 
@@ -155,8 +164,8 @@ class FedClient:
 
     @measure_time
     def train_local_model(
-        self, model: MnistModel, global_round: int, client_idx: int
-    ) -> Tuple[MnistModel, float]:
+            self, model: MNIST_CNN, global_round: int, client_idx: int
+    ) -> Tuple[MNIST_CNN, float]:
         # Set mode to train model
         model.train()
         epoch_loss = []
@@ -164,12 +173,16 @@ class FedClient:
         # Set optimizer for the local updates
         if self.args.optimizer == "sgd":
             self.optimizer = torch.optim.SGD(
-                model.parameters(), lr=self.args.lr, momentum=0.5
+                model.parameters(), lr=float(self.args.lr), momentum=float(self.args.momentum), weight_decay=float(self.args.weight_decay)
             )
         elif self.args.optimizer == "adam":
             self.optimizer = torch.optim.Adam(
-                model.parameters(), lr=self.args.lr, weight_decay=1e-4
+                model.parameters(), lr=float(self.args.lr), weight_decay=3.2e-6
             )
+        if self.args.lr_scheduler != None:
+            self.scheduler = StepLR(self.optimizer, step_size=30, gamma=0.1)
+        elif self.args.lr_scheduler=='CosineAnneralingLR':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=200)
 
         # Iterate over each epoch
         for epoch in range(self.args.epochs):
@@ -177,16 +190,18 @@ class FedClient:
 
             for batch_idx, (images, labels) in enumerate(self.train_loader[client_idx]):
                 images, labels = images.to(self.device), labels.to(self.device)
-
+                # Zero the gradients
+                self.optimizer.zero_grad()
                 # Compute the forward pass
                 log_probs = model(images)
 
                 loss = self.criterion(log_probs, labels)
 
-                # Zero the gradients
-                self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+
+                if self.args.lr_scheduler != None:
+                    self.scheduler.step()
 
                 # Print the loss and global round every `print_every` batches
                 if self.args.verbose and (batch_idx % 10 == 0):
@@ -229,7 +244,7 @@ class FedClient:
 
             # Evaluate local model on test dataset
             accuracy, loss = self.evaluate_model(
-                local_model, self.test_loader[client_idx]
+                local_model, self.valid_loader[client_idx]
             )
             eval_acc.append(accuracy)
             eval_losses.append(loss)
@@ -249,7 +264,7 @@ class FedClient:
         return (train_loss, train_accuracy, aggregated_weights, global_model_non_encry)
 
     def update_local_training_logs(
-        self, wandb, local_train_loss, local_eval_accuracy, local_eval_loss
+            self, wandb, local_train_loss, local_eval_accuracy, local_eval_loss
     ):
         wandb.log({"local_train_loss": local_train_loss})
         wandb.log(
@@ -281,6 +296,10 @@ class FedClient:
     @measure_time
     def aggregate_weights(self, weights):
         return self.server(weights).aggregate(self.args.he_scheme_name)
+
+    @measure_time
+    def aggregate_weights_nonencrypted(self, weights):
+        return self.server.average_weights_nonencrypted(weights)
 
     @measure_time
     def decrypt_weights(self, weights, weight_shapes):

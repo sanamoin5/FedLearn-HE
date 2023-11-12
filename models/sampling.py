@@ -11,21 +11,6 @@ from torchvision import datasets, transforms
 from torchvision.datasets.mnist import MNIST
 
 
-def mnist_iid(dataset: MNIST, num_clients: int) -> Dict[int, Set[int64]]:
-    """
-    Sample I.I.D. client data from MNIST dataset
-    :param dataset:
-    :param num_clients:
-    :return: dict of image index
-    """
-    num_items = int(len(dataset) / num_clients)
-    dict_users, all_idxs = {}, [i for i in range(len(dataset))]
-    for i in range(num_clients):
-        dict_users[i] = set(np.random.choice(all_idxs, num_items, replace=False))
-        all_idxs = list(set(all_idxs) - dict_users[i])
-    return dict_users
-
-
 def mnist_noniid(dataset, num_clients):
     """
     Sample non-I.I.D client data from MNIST dataset
@@ -51,7 +36,7 @@ def mnist_noniid(dataset, num_clients):
         idx_shard = list(set(idx_shard) - rand_set)
         for rand in rand_set:
             dict_users[i] = np.concatenate(
-                (dict_users[i], idxs[rand * num_imgs : (rand + 1) * num_imgs]), axis=0
+                (dict_users[i], idxs[rand * num_imgs: (rand + 1) * num_imgs]), axis=0
             )
     return dict_users
 
@@ -98,7 +83,7 @@ def mnist_noniid_unequal(dataset, num_clients):
             idx_shard = list(set(idx_shard) - rand_set)
             for rand in rand_set:
                 dict_users[i] = np.concatenate(
-                    (dict_users[i], idxs[rand * num_imgs : (rand + 1) * num_imgs]),
+                    (dict_users[i], idxs[rand * num_imgs: (rand + 1) * num_imgs]),
                     axis=0,
                 )
 
@@ -115,7 +100,7 @@ def mnist_noniid_unequal(dataset, num_clients):
             idx_shard = list(set(idx_shard) - rand_set)
             for rand in rand_set:
                 dict_users[i] = np.concatenate(
-                    (dict_users[i], idxs[rand * num_imgs : (rand + 1) * num_imgs]),
+                    (dict_users[i], idxs[rand * num_imgs: (rand + 1) * num_imgs]),
                     axis=0,
                 )
     else:
@@ -125,7 +110,7 @@ def mnist_noniid_unequal(dataset, num_clients):
             idx_shard = list(set(idx_shard) - rand_set)
             for rand in rand_set:
                 dict_users[i] = np.concatenate(
-                    (dict_users[i], idxs[rand * num_imgs : (rand + 1) * num_imgs]),
+                    (dict_users[i], idxs[rand * num_imgs: (rand + 1) * num_imgs]),
                     axis=0,
                 )
 
@@ -138,26 +123,31 @@ def mnist_noniid_unequal(dataset, num_clients):
             idx_shard = list(set(idx_shard) - rand_set)
             for rand in rand_set:
                 dict_users[k] = np.concatenate(
-                    (dict_users[k], idxs[rand * num_imgs : (rand + 1) * num_imgs]),
+                    (dict_users[k], idxs[rand * num_imgs: (rand + 1) * num_imgs]),
                     axis=0,
                 )
 
     return dict_users
 
 
-def cifar_iid(dataset, num_clients):
+def dataset_iid(dataset, num_clients, seed=42):
     """
-    Sample I.I.D. client data from CIFAR10 dataset
+    Sample I.I.D. client data from CIFAR10 or MNIST or BALNMP dataset
     :param dataset:
     :param num_clients:
     :return: dict of image index
     """
+    np.random.seed(seed)
     num_items = int(len(dataset) / num_clients)
     dict_users, all_idxs = {}, [i for i in range(len(dataset))]
     for i in range(num_clients):
         dict_users[i] = set(np.random.choice(all_idxs, num_items, replace=False))
         all_idxs = list(set(all_idxs) - dict_users[i])
     return dict_users
+
+
+def balnmp_noniid(dataset, num_clients):
+    pass
 
 
 def cifar_noniid(dataset, num_clients):
@@ -185,7 +175,7 @@ def cifar_noniid(dataset, num_clients):
         idx_shard = list(set(idx_shard) - rand_set)
         for rand in rand_set:
             dict_users[i] = np.concatenate(
-                (dict_users[i], idxs[rand * num_imgs : (rand + 1) * num_imgs]), axis=0
+                (dict_users[i], idxs[rand * num_imgs: (rand + 1) * num_imgs]), axis=0
             )
     return dict_users
 

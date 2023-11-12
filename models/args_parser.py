@@ -15,7 +15,7 @@ def args_parser() -> argparse.Namespace:
         "--rounds",
         type=int,
         default=10,
-        help="number of rounds of training ()Default: 10",
+        help="number of rounds of training (Default: 10)",
     )
     parser.add_argument(
         "--num_clients", type=int, default=2, help="number of clients (Default: 2)"
@@ -38,12 +38,7 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument(
         "--momentum", type=float, default=0.5, help="SGD momentum (default: 0.5)"
     )
-    parser.add_argument(
-        "--gpu",
-        default=None,
-        help="To use cuda, set \
-                            to a specific GPU ID. Default set to use CPU.",
-    )
+
     parser.add_argument("--gpu_id", default=None, help="Use to set a gpu id")
 
     # Homomorphic encryption arguments
@@ -58,7 +53,7 @@ def args_parser() -> argparse.Namespace:
         type=int,
         default=40,
         help="the scale to be used to encode tensor values. CKKSTensor will use the global_scale "
-        "provided by the context if it is set to None.",
+             "provided by the context if it is set to None.",
     )
     parser.add_argument(
         "--poly_modulus_degree",
@@ -72,7 +67,7 @@ def args_parser() -> argparse.Namespace:
         type=int,
         default=[40, 20, 40],
         help="List of bit size for each coefficient modulus. Can be an empty list for BFV, a default "
-        "value will be given.",
+             "value will be given.",
     )
     parser.add_argument(
         "--global_scale", type=int, default=40, help="the scaling factor"
@@ -83,14 +78,14 @@ def args_parser() -> argparse.Namespace:
         dest="create_galois_keys",
         action="store_true",
         help="Enables generation of public keys needed to perform encrypted vector rotation operations"
-        " on batched ciphertexts (default not set)",
+             " on batched ciphertexts (default not set)",
     )
     parser.add_argument(
         "--no_galois_keys",
         dest="create_galois_keys",
         action="store_false",
         help="Disables generation of public keys needed to perform encrypted vector rotation operations"
-        " on batched ciphertexts (default set)",
+             " on batched ciphertexts (default set)",
     )
     parser.set_defaults(create_galois_keys=False)
 
@@ -117,11 +112,10 @@ def args_parser() -> argparse.Namespace:
     parser.set_defaults(train_without_encryption=True)
 
     parser.add_argument(
-        "--dataset",
+        "--model",
         type=str,
         default="mnist",
-        help="name \
-                        of dataset(mnist, cifar-10)",
+        help="name of dataset and model(mnist_cnn, mnist_2nn, cifar_cnn, cifar_resnet, balnmp)",
     )
     parser.add_argument(
         "--num_classes",
@@ -137,9 +131,44 @@ def args_parser() -> argparse.Namespace:
         help="type \
                         of optimizer",
     )
+
+    parser.add_argument(
+        "--weight_decay",
+        type=float,
+        default=5e-4,
+        help="weight decay for sgd optimizer(default=5e-4)",
+    )
+    parser.add_argument(
+        "--test_dataset_bs",
+        type=int,
+        default=128,
+        help="batch size of test dataset( Default: 128)",
+    )
+    parser.add_argument(
+        "--lr_scheduler",
+        type=str,
+        default=None,
+        help="set the type of lr scheduler (currently only sets to StepLR)",
+    )
     parser.add_argument(
         "--iid", type=int, default=1, help="Default set to IID. Set to 0 for non-IID."
     )
+
+    parser.add_argument(
+        "--balnmp_data_type",
+        type=str,
+        choices=["type-1", "type-2", "type-3", "type-3-test"],
+        default="type-3",
+        help="For balnmp, select the type of data to run. Default is type-3",
+    )
+    parser.add_argument(
+        "--merge_method",
+        type=str,
+        choices=["max", "mean", "not_use"],
+        default="mean",
+        help="if model is balnmp, set the type of merge to be done for the modalities. Default mean.",
+    )
+
     parser.add_argument(
         "--unequal",
         type=int,

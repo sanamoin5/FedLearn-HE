@@ -22,11 +22,12 @@ if __name__ == "__main__":
     # Add the content root and source root to PYTHONPATH
     sys.path.append(content_root)
     sys.path.append(source_root)
+    if not os.path.exists('pretrained'):
+        os.mkdir('pretrained')
+    if not os.path.exists('reports'):
+        os.mkdir('reports')
     start_time = time.time()
     args = args_parser()
-    if args.gpu:
-        torch.cuda.set_device(args.gpu)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # call client
     client = Client()
