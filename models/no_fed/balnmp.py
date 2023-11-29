@@ -1,7 +1,6 @@
 import torch
 import torchvision
 from torch import nn
-
 torch.manual_seed(1)
 
 
@@ -20,7 +19,6 @@ BACKBONES = [
     "resnet101",
     "resnet152"
 ]
-
 
 class BackboneBuilder(nn.Module):
     """Build backbone with the last fc layer removed"""
