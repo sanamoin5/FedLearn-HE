@@ -10,6 +10,7 @@ from balnmp import MILNetWithClinicalData
 from tqdm import tqdm
 from args_parser import args_parser
 from PIL import Image
+import time
 
 transform = torchvision.transforms.Compose(
     [
@@ -61,7 +62,7 @@ class BreastDataset(torch.utils.data.Dataset):
         data["label"] = label
         data["patient_id"] = patient_id
         data["patch_paths"] = patch_paths
-
+        return data
 
     def preload_bag_data(self):
         """Preload data into memory"""
@@ -154,7 +155,7 @@ class Trainer:
                 metrics["test_metrics"].append({"epoch": epoch, "test_accuracy": test_accuracy})
 
         print("Training complete.")
-        with open('training_metrics_balnmp_centralized.json', 'w') as f:
+        with open('training_metrics_balnmp_centralized_100.json', 'w') as f:
             json.dump(metrics, f, indent=4)
 
     def prepare_dataloaders(self):
@@ -188,6 +189,7 @@ class Trainer:
 
 
 if __name__ == "__main__":
+    # time.sleep(21600)
     start_time = time.time()
     trainer = Trainer()
     trainer.train_and_evaluate()

@@ -57,7 +57,7 @@ def plot_data(file_path, accuracy_label, loss_label):
     plt.show()
 
 # no fed data
-plot_data('nofed/client_0_metrics_cnn_300ep.json', 'NoFed ResNet: Client 0', 'NoFed ResNet: Client 0')
-plot_data('nofed/client_1_metrics_cnn_300ep.json', 'NoFed ResNet: Client 1', 'NoFed ResNet: Client 1')
-plot_data('nofed/client_0_balnmp_metrics.json', 'NoFed BALNMP: Client 0', 'NoFed BALNMP: Client 0')
-plot_data('nofed/client_1_balnmp_metrics.json', 'NoFed BALNMP: Client 1', 'NoFed BALNMP: Client 1')
+plot_data('client_0_metrics_cnn_300ep.json', 'NoFed ResNet: Client 0', 'NoFed ResNet: Client 0')
+plot_data('client_1_metrics_cnn_300ep.json', 'NoFed ResNet: Client 1', 'NoFed ResNet: Client 1')
+plot_data('client_0_balnmp_metrics.json', 'NoFed BALNMP: Client 0', 'NoFed BALNMP: Client 0')
+plot_data('client_1_balnmp_metrics.json', 'NoFed BALNMP: Client 1', 'NoFed BALNMP: Client 1')

@@ -49,7 +49,7 @@ def plot_data(round_loss_file, round_accuracy_file, local_eval_accuracy_file, te
 
 
 # Example usage
-plot_data('nofed/cfr_roundloss_2cl_fawe.csv', 'nofed/cfr_roundacc_2cl_fawe.csv', 'nofed/cfr_localevalacc_2cl_fawe.csv',
+plot_data('cfr_roundloss_2cl_fawe.csv', 'nofed/cfr_roundacc_2cl_fawe.csv', 'nofed/cfr_localevalacc_2cl_fawe.csv',
           91.58, 'CFR Fed')
-plot_data('nofed/balnmp_roundloss_2cl_fawe.csv', 'nofed/balnmp_roundacc_2cl_fawe.csv', 'nofed/balnmp_localevalacc_2cl_fawe.csv',
+plot_data('balnmp_roundloss_2cl_fawe.csv', 'nofed/balnmp_roundacc_2cl_fawe.csv', 'nofed/balnmp_localevalacc_2cl_fawe.csv',
           80.23, 'BALNMP Fed')
