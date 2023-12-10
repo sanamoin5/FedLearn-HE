@@ -178,7 +178,7 @@ def get_dataset(args):
                 user_groups = mnist_noniid(train_dataset, args.num_clients)
 
     elif args.model == "balnmp":
-        data_dir = "data/balnmp/"
+        data_dir = "../data/balnmp/"
         balnmp_data_type = args.balnmp_data_type
         json_train_path = os.path.join(data_dir, 'json/train-' + balnmp_data_type + '.json')
         json_test_path = os.path.join(data_dir, 'json/test-' + balnmp_data_type + '.json')
@@ -211,61 +211,6 @@ def get_dataset(args):
     return train_dataset, test_dataset, user_groups
 
 
-BACKBONES = [
-    "vgg11",
-    "vgg11_bn",
-    "vgg13",
-    "vgg13_bn",
-    "vgg16",
-    "vgg16_bn",
-    "vgg19",
-    "vgg19_bn",
-    "resnet18",
-    "resnet34",
-    "resnet50",
-    "resnet101",
-    "resnet152"
-]
-
-
-class BackboneBuilder(nn.Module):
-    """Build backbone with the last fc layer removed"""
-
-    def __init__(self, backbone_name):
-        super().__init__()
-
-        assert backbone_name in BACKBONES
-
-        complete_backbone = torchvision.models.__dict__[backbone_name](pretrained=True)
-
-        if backbone_name.startswith("vgg"):
-            assert backbone_name in ["vgg11", "vgg11_bn", "vgg13", "vgg13_bn", "vgg16", "vgg16_bn", "vgg19", "vgg19_bn"]
-            self.extractor, self.output_features_size = self.vgg(complete_backbone)
-        elif backbone_name.startswith("resnet"):
-            assert backbone_name in ["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"]
-            self.extractor, self.output_features_size = self.resnet(backbone_name, complete_backbone)
-        else:
-            raise NotImplementedError
-
-    def forward(self, x):
-        patch_features = self.extractor(x)
-
-        return patch_features
-
-    def vgg(self, complete_backbone):
-        output_features_size = 512 * 7 * 7
-        extractor = nn.Sequential(*(list(complete_backbone.children())[:-1]))
-
-        return extractor, output_features_size
-
-    def resnet(self, backbone_name, complete_backbone):
-        if backbone_name in ["resnet18", "resnet34"]:
-            output_features_size = 512 * 1 * 1
-        else:
-            output_features_size = 2048 * 1 * 1
-        extractor = nn.Sequential(*(list(complete_backbone.children())[:-1]))
-
-        return extractor, output_features_size
 
 
 def exp_details(args: Namespace) -> None:

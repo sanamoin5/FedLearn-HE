@@ -1,7 +1,6 @@
 import torch
 import torchvision
 from torch import nn
-
 torch.manual_seed(1)
 
 
@@ -20,7 +19,6 @@ BACKBONES = [
     "resnet101",
     "resnet152"
 ]
-
 
 class BackboneBuilder(nn.Module):
     """Build backbone with the last fc layer removed"""
@@ -128,50 +126,3 @@ class MILNetWithClinicalData(nn.Module):
         # result = self.classifier(fused_data)
         #
         # return result, attention
-
-
-
-# calcutating size of parameters for this network
-#
-# import torchvision.models as models
-#
-# # Load the VGG16_bn model
-# vgg16_bn = models.vgg16_bn(pretrained=False)
-#
-# # Calculate the total number of parameters
-# total_params_vgg16_bn = sum(p.numel() for p in vgg16_bn.parameters())
-#
-# total_params_vgg16_bn
-#
-#
-#
-# # Given total parameters for a typical vgg16_bn network
-# total_params_vgg16_bn = 138365992
-#
-# # Define the additional layers in the MILNetWithClinicalData network
-# # and calculate their parameters
-#
-# # AttentionAggregator layer
-# in_features_size = 512 * 7 * 7  # From VGG16_bn architecture
-# out_feature_size = 256  # L
-# inner_feature_size = 128  # D
-#
-# # Parameters in AttentionAggregator
-# # fc1 layer
-# params_fc1 = in_features_size * out_feature_size + out_feature_size
-# # attention layer
-# params_attention = (out_feature_size * inner_feature_size + inner_feature_size) + \
-#                    (inner_feature_size * 1 + 1)
-#
-# # Classifier layer
-# # Assuming expand_times = 10 and clinical_data_size = 5
-# expand_times = 10
-# clinical_data_size = 5
-# num_classes = 2  # as an example
-# params_classifier = ((out_feature_size + clinical_data_size * expand_times) * 64) + 64 + \
-#                     (64 * num_classes) + num_classes
-#
-# # Summing up all the parameters
-# total_params_custom_model = total_params_vgg16_bn + params_fc1 + params_attention + params_classifier
-# total_params_custom_model
-# approximately 144,841,579 parameters.

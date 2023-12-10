@@ -100,12 +100,3 @@ def ResNet18():
 
 
 CIFAR10_ResNet =ResNet18()
-
-
-
-# calculating parameter size for this model
-
-# Calculate the total number of parameters
-# total_params_resnet18 = sum(p.numel() for p in CIFAR10_ResNet.parameters() if p.requires_grad)
-# total_params_resnet18
-# 11173962
